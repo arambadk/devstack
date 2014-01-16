@@ -1,0 +1,4 @@
+ssh-keygen -R 10.2.0.4
+ssh-keygen -R 10.2.0.5
+sudo ssh-keygen -R 10.2.0.4
+sudo ssh-keygen -R 10.2.0.5

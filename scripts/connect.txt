@@ -1,0 +1,2 @@
+ROUTER=`neutron router-list | grep router1 | cut -f 2 -d' '`
+sudo ip netns exec qrouter-$ROUTER /bin/bash
