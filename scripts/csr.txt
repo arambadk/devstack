@@ -1,0 +1,15 @@
+# was admin/demo
+source ../openrc admin admin
+
+
+# Create a mamangement network for CSR
+neutron net-create mgmt
+neutron subnet-create --disable-dhcp --name=mgmt-subnet mgmt 192.168.200.0/24
+
+export CSR_MGMT=`neutron port-list | grep mgmt_p | cut -d'|' -f 5 | cut -d' ' -f 5 | cut -d'"' -f 2`
+
+neutron router-create router2
+neutron router-interface-add router2 mgmt-subnet
+
+sudo ovs-vsctl add-port br-int to_csr tag=2 -- set interface to_csr type=internal 
+sudo ifconfig to_csr 192.168.200.3/24 up

@@ -1,0 +1,6 @@
+CSR_MGMT=`neutron port-list | grep mgmt_p | cut -d'|' -f 5 | cut -d' ' -f 5 | cut -d'"' -f 2`
+
+ROUTER=`neutron router-list | grep router2 | cut -f 2 -d' '`
+sudo ip netns exec qrouter-$ROUTER /bin/bash
+echo "To connect to the CSR use:"
+echo "telnet $CSR_MGMT"
