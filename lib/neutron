@@ -43,8 +43,8 @@
 # to run Neutron on this host, make sure that q-svc is also in
 # ``ENABLED_SERVICES``.
 #
-# If you're planning to use the Neutron openvswitch plugin, set
-# ``Q_PLUGIN`` to "openvswitch" and make sure the q-agt service is enabled
+# If you're planning to use the Neutron csr1k_openvswitch plugin, set
+# ``Q_PLUGIN`` to "csr1kv_openvswitch" and make sure the q-agt service is enabled
 # in ``ENABLED_SERVICES``.  If you're planning to use the Neutron
 # linuxbridge plugin, set ``Q_PLUGIN`` to "linuxbridge" and make sure the
 # q-agt service is enabled in ``ENABLED_SERVICES``.
@@ -85,12 +85,12 @@ else
     NEUTRON_BIN_DIR=$(get_python_exec_prefix)
 fi
 
-NEUTRON_CONF_DIR=/etc/neutron
+NEUTRON_CONF_DIR=/etc/neutron_csr1kv
 NEUTRON_CONF=$NEUTRON_CONF_DIR/neutron.conf
 export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/debug.ini"}
 
 # Default Neutron Plugin
-Q_PLUGIN=${Q_PLUGIN:-ml2}
+Q_PLUGIN=${Q_PLUGIN:-csr1kv_openvswitch}
 # Default Neutron Port
 Q_PORT=${Q_PORT:-9696}
 # Default Neutron Host
@@ -139,7 +139,7 @@ if is_service_enabled neutron; then
     # Provider Network Configurations
     # --------------------------------
 
-    # The following variables control the Neutron openvswitch and
+    # The following variables control the Neutron csr1kv_openvswitch and
     # linuxbridge plugins' allocation of tenant networks and
     # availability of provider networks. If these are not configured
     # in ``localrc``, tenant networks will be local to the host (with no
@@ -147,7 +147,7 @@ if is_service_enabled neutron; then
     # available for the allocation of provider networks.
 
     # To use GRE tunnels for tenant networks, set to True in
-    # ``localrc``. GRE tunnels are only supported by the openvswitch
+    # ``localrc``. GRE tunnels are only supported by the csr1kv_openvswitch
     # plugin, and currently only on Ubuntu.
     ENABLE_TENANT_TUNNELS=${ENABLE_TENANT_TUNNELS:-False}
 
@@ -157,7 +157,7 @@ if is_service_enabled neutron; then
     TENANT_TUNNEL_RANGES=${TENANT_TUNNEL_RANGE:-1:1000}
 
     # To use VLANs for tenant networks, set to True in localrc. VLANs
-    # are supported by the openvswitch and linuxbridge plugins, each
+    # are supported by the csr1kv_openvswitch and linuxbridge plugins, each
     # requiring additional configuration described below.
     ENABLE_TENANT_VLANS=${ENABLE_TENANT_VLANS:-False}
 
@@ -172,13 +172,13 @@ if is_service_enabled neutron; then
     # If using VLANs for tenant networks, or if using flat or VLAN
     # provider networks, set in ``localrc`` to the name of the physical
     # network, and also configure ``OVS_PHYSICAL_BRIDGE`` for the
-    # openvswitch agent or ``LB_PHYSICAL_INTERFACE`` for the linuxbridge
+    # csr1kv_openvswitch agent or ``LB_PHYSICAL_INTERFACE`` for the linuxbridge
     # agent, as described below.
     #
     # Example: ``PHYSICAL_NETWORK=default``
     PHYSICAL_NETWORK=${PHYSICAL_NETWORK:-}
 
-    # With the openvswitch plugin, if using VLANs for tenant networks,
+    # With the csr1kv_openvswitch plugin, if using VLANs for tenant networks,
     # or if using flat or VLAN provider networks, set in ``localrc`` to
     # the name of the OVS bridge to use for the physical network. The
     # bridge will be created if it does not already exist, but a
@@ -196,7 +196,7 @@ if is_service_enabled neutron; then
     # Example: ``LB_PHYSICAL_INTERFACE=eth1``
     LB_PHYSICAL_INTERFACE=${LB_PHYSICAL_INTERFACE:-}
 
-    # With the openvswitch plugin, set to True in ``localrc`` to enable
+    # With the csr1kv_openvswitch plugin, set to True in ``localrc`` to enable
     # provider GRE tunnels when ``ENABLE_TENANT_TUNNELS`` is False.
     #
     # Example: ``OVS_ENABLE_TUNNELING=True``
@@ -281,6 +281,9 @@ function configure_neutron() {
     fi
     if is_service_enabled q-l3; then
         _configure_neutron_l3_agent
+    fi
+    if is_service_enabled q-ciscocfgagent; then
+        _configure_neutron_cisco_cfg_agent
     fi
     if is_service_enabled q-meta; then
         _configure_neutron_metadata_agent
@@ -385,7 +388,15 @@ function create_neutron_initial_network() {
         sudo ifconfig $OVS_PHYSICAL_BRIDGE up
         sudo route add default gw $NETWORK_GATEWAY dev $OVS_PHYSICAL_BRIDGE
     else
-        NET_ID=$(neutron net-create --tenant-id $TENANT_ID "$PRIVATE_NETWORK_NAME" | grep ' id ' | get_field 2)
+	if [[ "$Q_PLUGIN" == "cisco" ]]; then
+            if _has_n1kv_subplugin; then
+	        N1KV_VLAN_NET_SEGMENT_RANGE=${N1KV_VLAN_NET_SEGMENT_RANGE:-"100-499"} 
+	        N1KV_VLAN_NET_PROFILE_NAME=${N1KV_VLAN_NET_PROFILE_NAME:-vlan_test_profile}
+	        PROFILE_ID=$(neutron cisco-network-profile-create --segment_range $N1KV_VLAN_NET_SEGMENT_RANGE $N1KV_VLAN_NET_PROFILE_NAME vlan | grep ' id ' | get_field 2)
+                PROFILE_ARG="--n1kv:profile-id=$PROFILE_ID"
+            fi
+        fi
+        NET_ID=$(neutron net-create $PROFILE_ARG --tenant-id $TENANT_ID "$PRIVATE_NETWORK_NAME" | grep ' id ' | get_field 2)
         die_if_not_set $LINENO NET_ID "Failure creating NET_ID for $PHYSICAL_NETWORK $TENANT_ID"
         SUBNET_ID=$(neutron subnet-create --tenant-id $TENANT_ID --ip_version 4 --gateway $NETWORK_GATEWAY --name $PRIVATE_SUBNET_NAME $NET_ID $FIXED_RANGE | grep ' id ' | get_field 2)
         die_if_not_set $LINENO SUBNET_ID "Failure creating SUBNET_ID for $TENANT_ID"
@@ -404,7 +415,7 @@ function create_neutron_initial_network() {
         fi
         neutron router-interface-add $ROUTER_ID $SUBNET_ID
         # Create an external network, and a subnet. Configure the external network as router gw
-        EXT_NET_ID=$(neutron net-create "$PUBLIC_NETWORK_NAME" -- --router:external=True | grep ' id ' | get_field 2)
+        EXT_NET_ID=$(neutron net-create $PROFILE_ARG "$PUBLIC_NETWORK_NAME" -- --router:external=True | grep ' id ' | get_field 2)
         die_if_not_set $LINENO EXT_NET_ID "Failure creating EXT_NET_ID for $PUBLIC_NETWORK_NAME"
         EXT_GW_IP=$(neutron subnet-create --ip_version 4 ${Q_FLOATING_ALLOCATION_POOL:+--allocation-pool $Q_FLOATING_ALLOCATION_POOL} --gateway $PUBLIC_NETWORK_GATEWAY --name $PUBLIC_SUBNET_NAME $EXT_NET_ID $FLOATING_RANGE -- --enable_dhcp=False | grep 'gateway_ip' | get_field 2)
         die_if_not_set $LINENO EXT_GW_IP "Failure creating EXT_GW_IP"
@@ -432,7 +443,7 @@ function create_neutron_initial_network() {
 function init_neutron() {
     recreate_database $Q_DB_NAME utf8
     # Run Neutron db migrations
-    $NEUTRON_BIN_DIR/neutron-db-manage --config-file $NEUTRON_CONF --config-file /$Q_PLUGIN_CONF_FILE upgrade head
+#BOB    $NEUTRON_BIN_DIR/neutron-db-manage --config-file $NEUTRON_CONF --config-file /$Q_PLUGIN_CONF_FILE upgrade head
 }
 
 # install_neutron() - Collect source and prepare
@@ -491,6 +502,11 @@ function start_neutron_agents() {
         screen_it q-vpn "cd $NEUTRON_DIR && $AGENT_VPN_BINARY $L3_CONF_FILES"
     else
         screen_it q-l3 "cd $NEUTRON_DIR && python $AGENT_L3_BINARY $L3_CONF_FILES"
+    fi
+
+    if is_service_enabled q-ciscocfgagent; then
+        CISCO_CFG_CONF_FILES="--config-file $NEUTRON_CONF --config-file=$Q_CISCO_CFGAGENT_CONF_FILE"
+        screen_it q-ciscocfgagent "cd $NEUTRON_DIR && python $AGENT_CISCO_CFGAGENT_BINARY $CISCO_CFG_CONF_FILES"
     fi
 
     screen_it q-meta "cd $NEUTRON_DIR && python $AGENT_META_BINARY --config-file $NEUTRON_CONF --config-file=$Q_META_CONF_FILE"
@@ -676,6 +692,24 @@ function _configure_neutron_l3_agent() {
     neutron_plugin_configure_l3_agent
 }
 
+function _configure_neutron_cisco_cfg_agent() {
+    Q_CISCO_CFGAGENT_ENABLED=True
+    AGENT_CISCO_CFGAGENT_BINARY=${AGENT_CISCO_CFGAGENT_BINARY:-"$NEUTRON_BIN_DIR/neutron-cisco-cfg-agent"}
+    CISCO_CFGAGENT_CONFIG_DIR=$NEUTRON_CONF_DIR/plugins/cisco
+    mkdir -p $CISCO_CFGAGENT_CONFIG_DIR
+    Q_CISCO_CFGAGENT_CONF_FILE=$CISCO_CFGAGENT_CONFIG_DIR/cisco_cfg_agent.ini
+
+    cp $NEUTRON_DIR/neutron/plugins/cisco/l3/etc/cisco_cfg_agent.ini $Q_CISCO_CFGAGENT_CONF_FILE
+
+    iniset $Q_CISCO_CFGAGENT_CONF_FILE DEFAULT verbose True
+    iniset $Q_CISCO_CFGAGENT_CONF_FILE DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
+
+    # Remove the next line later when cfg agent does not contain that code
+    _neutron_setup_interface_driver $Q_CISCO_CFGAGENT_CONF_FILE
+
+#    quantum_plugin_configure_cisco_cfg_agent
+}
+
 function _configure_neutron_metadata_agent() {
     AGENT_META_BINARY="$NEUTRON_BIN_DIR/neutron-metadata-agent"
     Q_META_CONF_FILE=$NEUTRON_CONF_DIR/metadata_agent.ini
@@ -732,7 +766,11 @@ function _configure_neutron_service() {
     Q_POLICY_FILE=$NEUTRON_CONF_DIR/policy.json
 
     cp $NEUTRON_DIR/etc/api-paste.ini $Q_API_PASTE_FILE
-    cp $NEUTRON_DIR/etc/policy.json $Q_POLICY_FILE
+    if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
+        cp $NEUTRON_DIR/neutron/plugins/csr1kv_openvswitch/copy_to/neutron_etc_dir/policy.json $Q_POLICY_FILE
+    else
+        cp $NEUTRON_DIR/etc/policy.json $Q_POLICY_FILE
+    fi
 
     # Update either configuration file with plugin
     iniset $NEUTRON_CONF DEFAULT core_plugin $Q_PLUGIN_CLASS
