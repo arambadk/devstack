@@ -530,12 +530,13 @@ if [[ -n "$LOGFILE" ]]; then
     # First clean up old log files.  Use the user-specified ``LOGFILE``
     # as the template to search for, appending '.*' to match the date
     # we added on earlier runs.
-    LOGDIR=$(dirname "$LOGFILE")
+    LINKDIR=$(dirname "$LOGFILE")
+    LOGDIR=$(dirname "$LOGFILE")/logs
     LOGFILENAME=$(basename "$LOGFILE")
     mkdir -p $LOGDIR
     find $LOGDIR -maxdepth 1 -name $LOGFILENAME.\* -mtime +$LOGDAYS -exec rm {} \;
-    LOGFILE=$LOGFILE.${CURRENT_LOG_TIME}
-    SUMFILE=$LOGFILE.${CURRENT_LOG_TIME}.summary
+    LOGFILE=$LOGDIR/$LOGFILENAME.${CURRENT_LOG_TIME}
+    SUMFILE=$LOGDIR/$LOGFILENAME.${CURRENT_LOG_TIME}.summary
 
     # Redirect output according to config
 
@@ -566,8 +567,8 @@ if [[ -n "$LOGFILE" ]]; then
 
     echo_summary "stack.sh log $LOGFILE"
     # Specified logfile name always links to the most recent log
-    ln -sf $LOGFILE $LOGDIR/$LOGFILENAME
-    ln -sf $SUMFILE $LOGDIR/$LOGFILENAME.summary
+    ln -sf $LOGFILE $LINKDIR/$LOGFILENAME
+    ln -sf $SUMFILE $LINKDIR/$LOGFILENAME.summary
 else
     # Set up output redirection without log files
     # Copy stdout to fd 3
