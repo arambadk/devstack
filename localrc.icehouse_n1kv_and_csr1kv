@@ -34,7 +34,8 @@ enable_service q-svc
 #disable_service q-agt
 #enable_service q-l3
 enable_service q-dhcp
-enable_service q-ciscocfgagent
+enable_service ciscocfgagent
+enable_service q-ciscorouter
 
 # Destination path for installation of the OpenStack components.
 # There is no need to specify it unless you want the code in

@@ -1,0 +1,23 @@
+# Cisco router plugin
+# -------------------
+
+# Save trace setting
+MY_XTRACE=$(set +o | grep xtrace)
+set +o xtrace
+
+CISCO_ROUTER_PLUGIN=neutron.plugins.cisco.l3.service_plugin.cisco_router_plugin.CiscoRouterPlugin
+
+function neutron_cisco_router_configure_common() {
+    _neutron_service_plugin_class_add $CISCO_ROUTER_PLUGIN
+}
+
+#function neutron_cisco_router_configure_driver() {
+#    :
+#}
+
+function neutron_cisco_router_stop() {
+    :
+}
+
+# Restore xtrace
+$MY_XTRACE
