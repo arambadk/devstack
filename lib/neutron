@@ -85,7 +85,7 @@ else
     NEUTRON_BIN_DIR=$(get_python_exec_prefix)
 fi
 
-NEUTRON_CONF_DIR=/etc/neutron_csr1kv
+NEUTRON_CONF_DIR=/etc/neutron
 NEUTRON_CONF=$NEUTRON_CONF_DIR/neutron.conf
 export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/debug.ini"}
 
@@ -262,6 +262,9 @@ function configure_neutron() {
     iniset_rpc_backend neutron $NEUTRON_CONF DEFAULT
 
     # goes before q-svc to init Q_SERVICE_PLUGIN_CLASSES
+    if is_service_enabled q-ciscorouter; then
+        _configure_neutron_cisco_router
+    fi
     if is_service_enabled q-lbaas; then
         _configure_neutron_lbaas
     fi
@@ -288,9 +291,6 @@ function configure_neutron() {
     fi
     if is_service_enabled q-meta; then
         _configure_neutron_metadata_agent
-    fi
-    if is_service_enabled q-ciscorouter; then
-        _configure_neutron_cisco_router
     fi
 
     _configure_neutron_debug_command

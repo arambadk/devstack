@@ -8,7 +8,7 @@ set +o xtrace
 source $TOP_DIR/lib/neutron_plugins/csr1kv_openvswitch_agent
 
 function neutron_plugin_configure_common() {
-    Q_PLUGIN_CONF_PATH=etc/neutron_csr1kv/plugins/csr1kv_openvswitch
+    Q_PLUGIN_CONF_PATH=etc/neutron/plugins/csr1kv_openvswitch
     Q_PLUGIN_CONF_FILENAME=csr1kv_ovs_neutron_plugin.ini
     Q_DB_NAME="csr1kv_ovs_neutron"
     Q_PLUGIN_CLASS="neutron.plugins.csr1kv_openvswitch.csr1kv_ovs_neutron_plugin.CSR1kv_OVSNeutronPluginV2"
