@@ -118,5 +118,16 @@ function has_neutron_plugin_security_group() {
     return 0
 }
 
+function neutron_plugin_initial_network() {
+    :
+}
+
+function neutron_plugin_cleanup() {
+    # Only cleanup OVS if the agent was configured
+    if is_service_enabled q-agt; then
+        neutron_ovs_base_cleanup
+    fi
+}
+
 # Restore xtrace
 $MY_XTRACE

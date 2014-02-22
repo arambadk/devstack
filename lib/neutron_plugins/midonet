@@ -83,5 +83,13 @@ function neutron_plugin_check_adv_test_requirements() {
     return 1
 }
 
+function neutron_plugin_initial_network() {
+    :
+}
+
+function neutron_plugin_cleanup() {
+    :
+}
+
 # Restore xtrace
 $MY_XTRACE

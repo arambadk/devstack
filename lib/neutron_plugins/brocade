@@ -55,5 +55,13 @@ function neutron_plugin_check_adv_test_requirements() {
     is_service_enabled q-agt && is_service_enabled q-dhcp && return 0
 }
 
+function neutron_plugin_initial_network() {
+    :
+}
+
+function neutron_plugin_cleanup() {
+    :
+}
+
 # Restore xtrace
 $BRCD_XTRACE

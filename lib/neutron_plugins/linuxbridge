@@ -52,5 +52,13 @@ function has_neutron_plugin_security_group() {
     return 0
 }
 
+function neutron_plugin_initial_network() {
+    :
+}
+
+function neutron_plugin_cleanup() {
+    :
+}
+
 # Restore xtrace
 $MY_XTRACE

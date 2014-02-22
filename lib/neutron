@@ -426,6 +426,9 @@ function create_neutron_initial_network() {
             fi
         fi
     fi
+
+    # Plugin specific initial network configuration
+    neutron_plugin_initial_network
 }
 
 # init_neutron() - Initialize databases, etc.
@@ -536,9 +539,8 @@ function stop_neutron() {
 # cleanup_neutron() - Remove residual data files, anything left over from previous
 # runs that a clean run would need to clean up
 function cleanup_neutron() {
-    if is_neutron_ovs_base_plugin; then
-        neutron_ovs_base_cleanup
-    fi
+    # Call plugin specific cleanup function
+    neutron_plugin_cleanup
 
     # delete all namespaces created by neutron
     for ns in $(sudo ip netns list | grep -o -E '(qdhcp|qrouter|qlbaas)-[0-9a-f-]*'); do

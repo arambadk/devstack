@@ -323,5 +323,15 @@ function neutron_plugin_setup_interface_driver() {
     iniset $conf_file DEFAULT interface_driver neutron.agent.linux.interface.OVSInterfaceDriver
 }
 
+function neutron_plugin_initial_network() {
+    :
+}
+
+function neutron_plugin_cleanup() {
+    if is_neutron_ovs_base_plugin; then
+        neutron_ovs_base_cleanup
+    fi
+}
+
 # Restore xtrace
 $MY_XTRACE
