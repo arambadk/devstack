@@ -119,13 +119,40 @@ function has_neutron_plugin_security_group() {
 }
 
 function neutron_plugin_initial_network() {
-    :
+    # Is the OpenDaylight MechanismDriver found
+    ODL_FOUND=$(echo $Q_ML2_PLUGIN_MECHANISM_DRIVERS | grep -q opendaylight ; echo $?)
+
+    # Set the OVSDB remote manager and OpenFlow controller on bridges to point
+    # both to OpenDaylight.
+    if [ "$ODL_FOUND" == "0" ]; then
+        ODL_LOCAL_IP=${ODL_LOCAL_IP:-$HOST_IP}
+        if [ "$ODL_MGR_IP" == "" ]; then
+            ODL_MGR_IP=$(grep url /$Q_PLUGIN_CONF_FILE | sed -e s'/.*\/\///'g -e 's/\:.*//'g)
+        fi
+        ODL_MGR_PORT=${ODL_MGR_PORT:-6640}
+        read ovstbl <<< $(sudo ovs-vsctl get Open_vSwitch . _uuid)
+        sudo ovs-vsctl set-manager tcp:$ODL_MGR_IP:$ODL_MGR_PORT
+        sudo ovs-vsctl set Open_vSwitch $ovstbl other_config={"local_ip"="$ODL_LOCAL_IP"}
+    fi
 }
 
 function neutron_plugin_cleanup() {
+    # Is the OpenDaylight MechanismDriver found
+    ODL_FOUND=$(echo $Q_ML2_PLUGIN_MECHANISM_DRIVERS | grep -q opendaylight ; echo $?)
+
     # Only cleanup OVS if the agent was configured
     if is_service_enabled q-agt; then
         neutron_ovs_base_cleanup
+    fi
+
+    # Cleanup bridges and remove the OVSDB manager if opendaylight was used
+    # as a MechanismDriver.
+    if [ "$ODL_FOUND" == "0" ]; then
+        sudo ovs-vsctl del-manager
+        BRIDGES=$(sudo ovs-vsctl list-br)
+        for bridge in $BRIDGES ; do
+            sudo ovs-vsctl del-controller $bridge
+        done
     fi
 }
 
