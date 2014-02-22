@@ -24,11 +24,6 @@ function configure_ciscocfgagent() {
 
     iniset $Q_CISCO_CFGAGENT_CONF_FILE DEFAULT verbose True
     iniset $Q_CISCO_CFGAGENT_CONF_FILE DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
-
-    # Remove the next line later when cfg agent does not contain that code
-    _neutron_setup_interface_driver $Q_CISCO_CFGAGENT_CONF_FILE
-
-#    quantum_plugin_configure_cisco_cfg_agent
 }
 
 function init_ciscocfgagent() {
@@ -40,6 +35,8 @@ function install_ciscocfgagent() {
 }
 
 function start_ciscocfgagent() {
+    # Need to enable q-ciscocfgagent due to how is_service_enabled function works
+    enable_service q-ciscocfgagent
     CISCO_CFG_CONF_FILES="--config-file $NEUTRON_CONF --config-file=$Q_CISCO_CFGAGENT_CONF_FILE"
     screen_it q-ciscocfgagent "cd $NEUTRON_DIR && python $AGENT_CISCO_CFGAGENT_BINARY $CISCO_CFG_CONF_FILES"
 }
