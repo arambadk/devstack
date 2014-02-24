@@ -1,3 +1,9 @@
++------------------------------------------------------------------------------------------------+
+|                                                                                                |
+|  PLEASE NOTE: You MUST set those variables below that are marked with <SET THIS VARIABLE!!!>.  |
+|                                                                                                |
++------------------------------------------------------------------------------------------------+
+
 OFFLINE=False
 RECLONE=yes
 
@@ -11,27 +17,27 @@ VERBOSE=True
 # the host. Setting it here also makes it available for ``openrc`` to include
 # when setting ``OS_AUTH_URL``.
 # ``HOST_IP`` is not set by default.
-HOST_IP=10.1.59.194
+#HOST_IP=10.1.59.194
+HOST_IP=<SET THIS VARIABLE!!!>
 
-FLOATING_RANGE=10.1.59.224/27
+#FLOATING_RANGE=10.1.59.224/27
+FLOATING_RANGE=<SET THIS VARIABLE!!!>
 FIXED_RANGE=10.11.12.0/24
 FIXED_NETWORK_SIZE=256
 FLAT_INTERFACE=eth0
 NETWORK_GATEWAY=10.11.12.1
 
-our_pw=Sthlab04
+our_pw=<SET THIS VARIABLE!!!>
 MYSQL_PASSWORD=$our_pw
 RABBIT_PASSWORD=$our_pw
 SERVICE_TOKEN=$our_pw
 SERVICE_PASSWORD=$our_pw
 ADMIN_PASSWORD=$our_pw
 
-#ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-cond,cinder,c-sch,c-api,c-vol,n-sch,n-novnc,n-xvnc,n-cauth,horizon,rabbit
-#enable_service mysql
 disable_service n-net
 enable_service neutron
 enable_service q-svc
-#disable_service q-agt
+disable_service q-agt
 #enable_service q-l3
 enable_service q-dhcp
 enable_service ciscocfgagent
@@ -67,31 +73,32 @@ Q_PLUGIN=cisco
 declare -a Q_CISCO_PLUGIN_SUBPLUGINS=(n1kv)
 Q_CISCO_PLUGIN_RESTART_VSM=yes
 Q_CISCO_PLUGIN_VSM_IP=192.168.168.2
-Q_CISCO_PLUGIN_VSM_USERNAME=admin
-Q_CISCO_PLUGIN_VSM_PASSWORD=Sfish123
-Q_CISCO_PLUGIN_VSM_ISO_IMAGE=/home/stack/for_n1k/18/n1000v-dk9.5.2.1.SK1.2.1.iso
-Q_CISCO_PLUGIN_UVEM_DEB_IMAGE=/home/stack/for_n1k/18/nexus_1000v_vem-12.04-5.2.1.SK1.2.1.S0-21.deb
-#Q_CISCO_PLUGIN_VSM_ISO_IMAGE=/home/stack/for_n1k/n1000v-dk9.5.2.1.SK1.2.1.iso
-#Q_CISCO_PLUGIN_UVEM_DEB_IMAGE=/home/stack/for_n1k/nexus_1000v_vem-12.04-5.2.1.SK1.2.1.S0-18.deb
+#Q_CISCO_PLUGIN_VSM_USERNAME=admin
+Q_CISCO_PLUGIN_VSM_USERNAME=<SET THIS VARIABLE!!!>
+#Q_CISCO_PLUGIN_VSM_PASSWORD=Sfish123
+Q_CISCO_PLUGIN_VSM_PASSWORD=<SET THIS VARIABLE!!!>
+#Q_CISCO_PLUGIN_VSM_ISO_IMAGE=/home/stack/for_n1k/18/n1000v-dk9.5.2.1.SK1.2.1.iso
+Q_CISCO_PLUGIN_VSM_ISO_IMAGE=<SET THIS VARIABLE!!!>
+#Q_CISCO_PLUGIN_UVEM_DEB_IMAGE=/home/stack/for_n1k/18/nexus_1000v_vem-12.04-5.2.1.SK1.2.1.S0-21.deb
+Q_CISCO_PLUGIN_UVEM_DEB_IMAGE=<SET THIS VARIABLE!!!>
 NOVA_USE_QUANTUM_API=v2
 N1KV_VLAN_NET_PROFILE_NAME=vlan_test_profile
 N1KV_VLAN_NET_SEGMENT_RANGE=100-499
-Q_CISCO_ROUTER_PLUGIN=yes
 
-Q_CISCO_CSR1KV_QCOW2_IMAGE=$HOME/os_csr_images/XE311_FCS-1911_csr1000v-universalk9.03.11.00.S.154-1.S-std.qcow2
+Q_CISCO_ROUTER_PLUGIN=yes
+#Q_CISCO_CSR1KV_QCOW2_IMAGE=$HOME/os_csr_images/XE311_FCS-1911_csr1000v-universalk9.03.11.00.S.154-1.S-std.qcow2
+Q_CISCO_CSR1KV_QCOW2_IMAGE=<SET THIS VARIABLE!!!>
 
 GIT_BASE=https://github.com
 
 # Neutron service
 NEUTRON_REPO=https://github.com/CiscoSystems/neutron.git
-NEUTRON_BRANCH=bobmel/csr1kv_for_routing_icehouse
+NEUTRON_BRANCH=csr1kv_for_routing_icehouse
 
 # Neutron client
 #NEUTRONCLIENT_REPO=https://github.com/CiscoSystems/python-neutronclient.git
-##NEUTRONCLIENT_BRANCH=n1kv-profile-support
-#NEUTRONCLIENT_BRANCH=n1k-multisegment-support
+#NEUTRONCLIENT_BRANCH=
 
 # Horizon
 #HORIZON_REPO=https://github.com/CiscoSystems/horizon.git
-#HORIZON_BRANCH=n1k-grizzly
-#HORIZON_SETTINGS=/home/stack/devstack_n1kv_csr1kv/dashboard_local_settings.py
+#HORIZON_BRANCH=
