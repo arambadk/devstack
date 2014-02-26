@@ -1,5 +1,7 @@
 #!/bin/bash
 
+devstack_dir=$(find -L $HOME -name devstack -type d)
+cd $devstack_dir
 eval $(grep ^Q_PLUGIN= ./localrc)
 eval $(grep '^declare -a Q_CISCO_PLUGIN_SUBPLUGINS=' ./localrc)
 if [[ "$Q_PLUGIN" != "cisco" || "${Q_CISCO_PLUGIN_SUBPLUGINS[0]}" != "n1kv" ]]; then
@@ -12,7 +14,7 @@ eval $(grep ^DEST= ./localrc)
 eval $(grep ^DEST= ./stackrc)
 eval $(grep NEUTRON_DIR= ./lib/neutron)
 
-cd $NEUTRON_DIR
-script_dir=$(dirname $(find $NEUTRON_DIR -name csr1kv_install_all.sh)) 
+script_dir=$(dirname $(find $NEUTRON_DIR -name csr1kv_install_all.sh))
 cd $script_dir
-./install_all neutron n1kv $localrc
+./csr1kv_install_all.sh neutron n1kv $localrc
+
