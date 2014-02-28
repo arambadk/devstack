@@ -1,0 +1,6 @@
+sudo ovs-vsctl del-br br-ex
+sudo ifconfig eth3 down
+sudo ifconfig eth3 up
+sudo ovs-vsctl add-br br-ex
+sudo ifconfig br-ex up
+sudo ovs-vsctl add-port br-ex eth3
