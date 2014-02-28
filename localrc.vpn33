@@ -1,0 +1,53 @@
+GIT_BASE=http://git.openstack.org
+DEST=/opt/stack
+disable_service n-net
+enable_service q-svc
+enable_service q-agt
+enable_service q-dhcp
+enable_service q-l3
+enable_service q-meta
+enable_service neutron
+enable_service tempest
+enable_service q-vpn
+
+API_RATE_LIMIT=False
+VOLUME_BACKING_FILE_SIZE=4G
+
+FIXED_RANGE=10.2.0.0/24
+FIXED_NETWORK_SIZE=256
+NETWORK_GATEWAY=10.2.0.1
+PRIVATE_SUBNET_NAME=mysubnet
+
+PUBLIC_SUBNET_NAME=yoursubnet
+PUBLIC_INTERFACE=eth3
+OVS_PHYSICAL_BRIDGE=br-ex
+FLOATING_RANGE=172.24.4.0/24
+PUBLIC_NETWORK_GATEWAY=172.24.4.20
+Q_FLOATING_ALLOCATION_POOL="start=172.24.4.21,end=172.24.4.29"
+Q_USE_SECGROUP=False
+
+VIRT_DRIVER=libvirt
+SWIFT_REPLICAS=1
+export OS_NO_CACHE=True
+SCREEN_LOGDIR=/opt/stack/screen-logs
+SYSLOG=True
+SKIP_EXERCISES=boot_from_volume,client-env
+ROOTSLEEP=0
+ACTIVE_TIMEOUT=60
+BOOT_TIMEOUT=90
+ASSOCIATE_TIMEOUT=60
+ADMIN_PASSWORD=password
+MYSQL_PASSWORD=password
+RABBIT_PASSWORD=password
+SERVICE_PASSWORD=password
+SERVICE_TOKEN=tokentoken
+# Temp try ML2
+# Q_PLUGIN=openvswitch
+Q_USE_DEBUG_COMMAND=True
+
+Q_VPN_EXTRA_CONF_FILES=(/opt/stack/neutron/etc/neutron/plugins/cisco/cisco_vpn_agent.ini)
+
+RECLONE=No
+# OFFLINE=True
+# RECLONE=yes
+OFFLINE=False
