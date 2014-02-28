@@ -1,4 +1,6 @@
-source openrc admin admin
+# was admin/demo
+source ~/devstack/openrc admin admin
+
 
 # Create a mamangement network for CSR
 neutron net-create mgmt
