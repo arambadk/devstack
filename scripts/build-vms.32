@@ -1,0 +1,14 @@
+source openrc admin admin
+
+# Allow admin tenant access to private net (needed?)
+neutron net-update --shared=True private
+
+source openrc admin demo
+
+nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
+nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
+ 
+PRIVATE_NET=`neutron net-list | grep private | cut -f 2 -d'|' | cut -f 2 -d' '`
+ 
+nova boot --flavor 1 --image cirros-0.3.1-x86_64-uec --nic net-id=$PRIVATE_NET mary
+nova boot --flavor 1 --image cirros-0.3.1-x86_64-uec --nic net-id=$PRIVATE_NET thomas
