@@ -1,3 +1,0 @@
-source ../openrc admin demo
-nova delete mary
-nova delete thomas

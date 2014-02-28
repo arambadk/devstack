@@ -10,5 +10,5 @@ nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
  
 PRIVATE_NET=`neutron net-list | grep private | cut -f 2 -d'|' | cut -f 2 -d' '`
  
-nova boot --flavor 1 --image cirros-0.3.1-x86_64-uec --nic net-id=$PRIVATE_NET mary
-nova boot --flavor 1 --image cirros-0.3.1-x86_64-uec --nic net-id=$PRIVATE_NET thomas
+nova boot --flavor 1 --image cirros-0.3.1-x86_64-uec --nic net-id=$PRIVATE_NET peter
+nova boot --flavor 1 --image cirros-0.3.1-x86_64-uec --nic net-id=$PRIVATE_NET paul
