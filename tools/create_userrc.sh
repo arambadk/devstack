@@ -11,8 +11,7 @@ set -o xtrace
 
 ACCOUNT_DIR=./accrc
 
-display_help()
-{
+function display_help {
 cat <<EOF
 
 usage: $0 <options..>
@@ -54,9 +53,7 @@ $0 -P -C mytenant -u myuser -p mypass
 EOF
 }
 
-if ! options=$(getopt -o hPAp:u:r:C: -l os-username:,os-password:,os-tenant-name:,os-tenant-id:,os-auth-url:,target-dir:,skip-tenant:,os-cacert:,help,debug -- "$@")
-then
-    #parse error
+if ! options=$(getopt -o hPAp:u:r:C: -l os-username:,os-password:,os-tenant-name:,os-tenant-id:,os-auth-url:,target-dir:,skip-tenant:,os-cacert:,help,debug -- "$@"); then
     display_help
     exit 1
 fi
@@ -71,8 +68,7 @@ MODE=""
 ROLE=Member
 USER_NAME=""
 USER_PASS=""
-while [ $# -gt 0 ]
-do
+while [ $# -gt 0 ]; do
     case "$1" in
     -h|--help) display_help; exit 0 ;;
     --os-username) export OS_USERNAME=$2; shift ;;
@@ -154,7 +150,7 @@ if ! nova x509-get-root-cert "$EUCALYPTUS_CERT"; then
 fi
 
 
-function add_entry(){
+function add_entry {
     local user_id=$1
     local user_name=$2
     local tenant_id=$3
@@ -200,7 +196,7 @@ export EC2_URL="$EC2_URL"
 export S3_URL="$S3_URL"
 # OpenStack USER ID = $user_id
 export OS_USERNAME="$user_name"
-# Openstack Tenant ID = $tenant_id
+# OpenStack Tenant ID = $tenant_id
 export OS_TENANT_NAME="$tenant_name"
 export OS_AUTH_URL="$OS_AUTH_URL"
 export OS_CACERT="$OS_CACERT"
@@ -216,7 +212,7 @@ EOF
 }
 
 #admin users expected
-function create_or_get_tenant(){
+function create_or_get_tenant {
     local tenant_name=$1
     local tenant_id=`keystone tenant-list | awk '/\|[[:space:]]*'"$tenant_name"'[[:space:]]*\|.*\|/ {print $2}'`
     if [ -n "$tenant_id" ]; then
@@ -226,7 +222,7 @@ function create_or_get_tenant(){
     fi
 }
 
-function create_or_get_role(){
+function create_or_get_role {
     local role_name=$1
     local role_id=`keystone role-list| awk '/\|[[:space:]]*'"$role_name"'[[:space:]]*\|/ {print $2}'`
     if [ -n "$role_id" ]; then
@@ -237,7 +233,7 @@ function create_or_get_role(){
 }
 
 # Provides empty string when the user does not exists
-function get_user_id(){
+function get_user_id {
     local user_name=$1
     keystone user-list | awk '/^\|[^|]*\|[[:space:]]*'"$user_name"'[[:space:]]*\|.*\|/ {print $2}'
 }
@@ -253,6 +249,14 @@ if [ $MODE != "create" ]; then
             read user_id user_name <<< `echo "$user_id_at_name" | sed 's/@/ /'`
             if [ $MODE = one -a "$user_name" != "$USER_NAME" ]; then
                 continue;
+            fi
+
+            # Checks for a specific password defined for an user.
+            # Example for an username johndoe:
+            #                     JOHNDOE_PASSWORD=1234
+            eval SPECIFIC_UPASSWORD="\$${USER_NAME^^}_PASSWORD"
+            if [ -n "$SPECIFIC_UPASSWORD" ]; then
+                USER_PASS=$SPECIFIC_UPASSWORD
             fi
             add_entry "$user_id" "$user_name" "$tenant_id" "$tenant_name" "$USER_PASS"
         done

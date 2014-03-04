@@ -52,20 +52,30 @@ fi
 # Glance connection info.  Note the port must be specified.
 GLANCE_HOSTPORT=${GLANCE_HOSTPORT:-$SERVICE_HOST:9292}
 
+# Tell Tempest this project is present
+TEMPEST_SERVICES+=,glance
+
 
 # Functions
 # ---------
 
+# Test if any Glance services are enabled
+# is_glance_enabled
+function is_glance_enabled {
+    [[ ,${ENABLED_SERVICES} =~ ,"g-" ]] && return 0
+    return 1
+}
+
 # cleanup_glance() - Remove residual data files, anything left over from previous
 # runs that a clean run would need to clean up
-function cleanup_glance() {
+function cleanup_glance {
     # kill instances (nova)
     # delete image files (glance)
     sudo rm -rf $GLANCE_CACHE_DIR $GLANCE_IMAGE_DIR $GLANCE_AUTH_CACHE_DIR
 }
 
 # configure_glance() - Set config files, create data dirs, etc
-function configure_glance() {
+function configure_glance {
     if [[ ! -d $GLANCE_CONF_DIR ]]; then
         sudo mkdir -p $GLANCE_CONF_DIR
     fi
@@ -105,10 +115,8 @@ function configure_glance() {
     iniset $GLANCE_API_CONF keystone_authtoken admin_tenant_name $SERVICE_TENANT_NAME
     iniset $GLANCE_API_CONF keystone_authtoken admin_user glance
     iniset $GLANCE_API_CONF keystone_authtoken admin_password $SERVICE_PASSWORD
-    if is_service_enabled qpid; then
-        iniset $GLANCE_API_CONF DEFAULT notifier_strategy qpid
-    elif [ -n "$RABBIT_HOST" ] &&  [ -n "$RABBIT_PASSWORD" ]; then
-        iniset $GLANCE_API_CONF DEFAULT notifier_strategy rabbit
+    if is_service_enabled qpid || [ -n "$RABBIT_HOST" ] && [ -n "$RABBIT_PASSWORD" ]; then
+        iniset $GLANCE_API_CONF DEFAULT notification_driver messaging
     fi
     iniset_rpc_backend glance $GLANCE_API_CONF DEFAULT
     iniset $GLANCE_API_CONF keystone_authtoken signing_dir $GLANCE_AUTH_CACHE_DIR/api
@@ -121,7 +129,7 @@ function configure_glance() {
     if is_service_enabled s-proxy; then
         iniset $GLANCE_API_CONF DEFAULT default_store swift
         iniset $GLANCE_API_CONF DEFAULT swift_store_auth_address $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0/
-        iniset $GLANCE_API_CONF DEFAULT swift_store_user $SERVICE_TENANT_NAME:glance
+        iniset $GLANCE_API_CONF DEFAULT swift_store_user $SERVICE_TENANT_NAME:glance-swift
         iniset $GLANCE_API_CONF DEFAULT swift_store_key $SERVICE_PASSWORD
         iniset $GLANCE_API_CONF DEFAULT swift_store_create_container_on_put True
 
@@ -152,7 +160,7 @@ function configure_glance() {
 }
 
 # create_glance_cache_dir() - Part of the init_glance() process
-function create_glance_cache_dir() {
+function create_glance_cache_dir {
     # Create cache dir
     sudo mkdir -p $GLANCE_AUTH_CACHE_DIR/api
     sudo chown $STACK_USER $GLANCE_AUTH_CACHE_DIR/api
@@ -163,7 +171,7 @@ function create_glance_cache_dir() {
 }
 
 # init_glance() - Initialize databases, etc.
-function init_glance() {
+function init_glance {
     # Delete existing images
     rm -rf $GLANCE_IMAGE_DIR
     mkdir -p $GLANCE_IMAGE_DIR
@@ -182,19 +190,19 @@ function init_glance() {
 }
 
 # install_glanceclient() - Collect source and prepare
-function install_glanceclient() {
+function install_glanceclient {
     git_clone $GLANCECLIENT_REPO $GLANCECLIENT_DIR $GLANCECLIENT_BRANCH
     setup_develop $GLANCECLIENT_DIR
 }
 
 # install_glance() - Collect source and prepare
-function install_glance() {
+function install_glance {
     git_clone $GLANCE_REPO $GLANCE_DIR $GLANCE_BRANCH
     setup_develop $GLANCE_DIR
 }
 
 # start_glance() - Start running processes, including screen
-function start_glance() {
+function start_glance {
     screen_it g-reg "cd $GLANCE_DIR; $GLANCE_BIN_DIR/glance-registry --config-file=$GLANCE_CONF_DIR/glance-registry.conf"
     screen_it g-api "cd $GLANCE_DIR; $GLANCE_BIN_DIR/glance-api --config-file=$GLANCE_CONF_DIR/glance-api.conf"
     echo "Waiting for g-api ($GLANCE_HOSTPORT) to start..."
@@ -204,7 +212,7 @@ function start_glance() {
 }
 
 # stop_glance() - Stop running processes
-function stop_glance() {
+function stop_glance {
     # Kill the Glance screen windows
     screen_stop g-api
     screen_stop g-reg

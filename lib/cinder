@@ -27,6 +27,12 @@ set +o xtrace
 
 # set up default driver
 CINDER_DRIVER=${CINDER_DRIVER:-default}
+CINDER_PLUGINS=$TOP_DIR/lib/cinder_plugins
+
+# grab plugin config if specified via cinder_driver
+if [[ -r $CINDER_PLUGINS/$CINDER_DRIVER ]]; then
+    source $CINDER_PLUGINS/$CINDER_DRIVER
+fi
 
 # set up default directories
 CINDER_DIR=$DEST/cinder
@@ -79,13 +85,24 @@ VOLUME_BACKING_DEVICE2=${VOLUME_BACKING_DEVICE2:-}
 
 VOLUME_NAME_PREFIX=${VOLUME_NAME_PREFIX:-volume-}
 
+# Tell Tempest this project is present
+TEMPEST_SERVICES+=,cinder
+
 
 # Functions
 # ---------
+
+# Test if any Cinder services are enabled
+# is_cinder_enabled
+function is_cinder_enabled {
+    [[ ,${ENABLED_SERVICES} =~ ,"c-" ]] && return 0
+    return 1
+}
+
 # _clean_lvm_lv removes all cinder LVM volumes
 #
 # Usage: _clean_lvm_lv $VOLUME_GROUP $VOLUME_NAME_PREFIX
-function _clean_lvm_lv() {
+function _clean_lvm_lv {
     local vg=$1
     local lv_prefix=$2
 
@@ -102,7 +119,7 @@ function _clean_lvm_lv() {
 # volume group used by cinder
 #
 # Usage: _clean_lvm_backing_file() $VOLUME_GROUP
-function _clean_lvm_backing_file() {
+function _clean_lvm_backing_file {
     local vg=$1
 
     # if there is no logical volume left, it's safe to attempt a cleanup
@@ -119,7 +136,7 @@ function _clean_lvm_backing_file() {
 
 # cleanup_cinder() - Remove residual data files, anything left over from previous
 # runs that a clean run would need to clean up
-function cleanup_cinder() {
+function cleanup_cinder {
     # ensure the volume group is cleared up because fails might
     # leave dead volumes in the group
     TARGETS=$(sudo tgtadm --op show --mode target)
@@ -164,53 +181,38 @@ function cleanup_cinder() {
 }
 
 # configure_cinder_rootwrap() - configure Cinder's rootwrap
-function configure_cinder_rootwrap() {
+function configure_cinder_rootwrap {
     # Set the paths of certain binaries
     CINDER_ROOTWRAP=$(get_rootwrap_location cinder)
-    if [[ ! -x $CINDER_ROOTWRAP ]]; then
-        CINDER_ROOTWRAP=$(get_rootwrap_location oslo)
-        if [[ ! -x $CINDER_ROOTWRAP ]]; then
-            die $LINENO "No suitable rootwrap found."
-        fi
-    fi
 
-    # If Cinder ships the new rootwrap filters files, deploy them
-    # (owned by root) and add a parameter to $CINDER_ROOTWRAP
-    ROOTWRAP_CINDER_SUDOER_CMD="$CINDER_ROOTWRAP"
-    if [[ -d $CINDER_DIR/etc/cinder/rootwrap.d ]]; then
-        # Wipe any existing rootwrap.d files first
-        if [[ -d $CINDER_CONF_DIR/rootwrap.d ]]; then
-            sudo rm -rf $CINDER_CONF_DIR/rootwrap.d
-        fi
-        # Deploy filters to /etc/cinder/rootwrap.d
-        sudo mkdir -m 755 $CINDER_CONF_DIR/rootwrap.d
-        sudo cp $CINDER_DIR/etc/cinder/rootwrap.d/*.filters $CINDER_CONF_DIR/rootwrap.d
-        sudo chown -R root:root $CINDER_CONF_DIR/rootwrap.d
-        sudo chmod 644 $CINDER_CONF_DIR/rootwrap.d/*
-        # Set up rootwrap.conf, pointing to /etc/cinder/rootwrap.d
-        if [[ -f $CINDER_DIR/etc/cinder/rootwrap.conf ]]; then
-            sudo cp $CINDER_DIR/etc/cinder/rootwrap.conf $CINDER_CONF_DIR/
-        else
-            # rootwrap.conf is no longer shipped in Cinder itself
-            echo "filters_path=" | sudo tee $CINDER_CONF_DIR/rootwrap.conf > /dev/null
-        fi
-        sudo sed -e "s:^filters_path=.*$:filters_path=$CINDER_CONF_DIR/rootwrap.d:" -i $CINDER_CONF_DIR/rootwrap.conf
-        sudo chown root:root $CINDER_CONF_DIR/rootwrap.conf
-        sudo chmod 0644 $CINDER_CONF_DIR/rootwrap.conf
-        # Specify rootwrap.conf as first parameter to rootwrap
-        CINDER_ROOTWRAP="$CINDER_ROOTWRAP $CINDER_CONF_DIR/rootwrap.conf"
-        ROOTWRAP_CINDER_SUDOER_CMD="$CINDER_ROOTWRAP *"
+    # Deploy new rootwrap filters files (owned by root).
+    # Wipe any existing rootwrap.d files first
+    if [[ -d $CINDER_CONF_DIR/rootwrap.d ]]; then
+        sudo rm -rf $CINDER_CONF_DIR/rootwrap.d
     fi
+    # Deploy filters to /etc/cinder/rootwrap.d
+    sudo mkdir -m 755 $CINDER_CONF_DIR/rootwrap.d
+    sudo cp $CINDER_DIR/etc/cinder/rootwrap.d/*.filters $CINDER_CONF_DIR/rootwrap.d
+    sudo chown -R root:root $CINDER_CONF_DIR/rootwrap.d
+    sudo chmod 644 $CINDER_CONF_DIR/rootwrap.d/*
+    # Set up rootwrap.conf, pointing to /etc/cinder/rootwrap.d
+    sudo cp $CINDER_DIR/etc/cinder/rootwrap.conf $CINDER_CONF_DIR/
+    sudo sed -e "s:^filters_path=.*$:filters_path=$CINDER_CONF_DIR/rootwrap.d:" -i $CINDER_CONF_DIR/rootwrap.conf
+    sudo chown root:root $CINDER_CONF_DIR/rootwrap.conf
+    sudo chmod 0644 $CINDER_CONF_DIR/rootwrap.conf
+    # Specify rootwrap.conf as first parameter to rootwrap
+    ROOTWRAP_CSUDOER_CMD="$CINDER_ROOTWRAP $CINDER_CONF_DIR/rootwrap.conf *"
 
+    # Set up the rootwrap sudoers for cinder
     TEMPFILE=`mktemp`
-    echo "$STACK_USER ALL=(root) NOPASSWD: $ROOTWRAP_CINDER_SUDOER_CMD" >$TEMPFILE
+    echo "$STACK_USER ALL=(root) NOPASSWD: $ROOTWRAP_CSUDOER_CMD" >$TEMPFILE
     chmod 0440 $TEMPFILE
     sudo chown root:root $TEMPFILE
     sudo mv $TEMPFILE /etc/sudoers.d/cinder-rootwrap
 }
 
 # configure_cinder() - Set config files, create data dirs, etc
-function configure_cinder() {
+function configure_cinder {
     if [[ ! -d $CINDER_CONF_DIR ]]; then
         sudo mkdir -p $CINDER_CONF_DIR
     fi
@@ -297,42 +299,8 @@ function configure_cinder() {
         setup_colorized_logging $CINDER_CONF DEFAULT "project_id" "user_id"
     fi
 
-    if [ "$CINDER_DRIVER" == "XenAPINFS" ]; then
-        (
-            set -u
-            iniset $CINDER_CONF DEFAULT volume_driver "cinder.volume.drivers.xenapi.sm.XenAPINFSDriver"
-            iniset $CINDER_CONF DEFAULT xenapi_connection_url "$CINDER_XENAPI_CONNECTION_URL"
-            iniset $CINDER_CONF DEFAULT xenapi_connection_username "$CINDER_XENAPI_CONNECTION_USERNAME"
-            iniset $CINDER_CONF DEFAULT xenapi_connection_password "$CINDER_XENAPI_CONNECTION_PASSWORD"
-            iniset $CINDER_CONF DEFAULT xenapi_nfs_server "$CINDER_XENAPI_NFS_SERVER"
-            iniset $CINDER_CONF DEFAULT xenapi_nfs_serverpath "$CINDER_XENAPI_NFS_SERVERPATH"
-        )
-    elif [ "$CINDER_DRIVER" == "nfs" ]; then
-        iniset $CINDER_CONF DEFAULT volume_driver "cinder.volume.drivers.nfs.NfsDriver"
-        iniset $CINDER_CONF DEFAULT nfs_shares_config "$CINDER_CONF_DIR/nfs_shares.conf"
-        echo "$CINDER_NFS_SERVERPATH" | sudo tee "$CINDER_CONF_DIR/nfs_shares.conf"
-        sudo chmod 666 $CINDER_CONF_DIR/nfs_shares.conf
-    elif [ "$CINDER_DRIVER" == "sheepdog" ]; then
-        iniset $CINDER_CONF DEFAULT volume_driver "cinder.volume.drivers.sheepdog.SheepdogDriver"
-    elif [ "$CINDER_DRIVER" == "glusterfs" ]; then
-        # To use glusterfs, set the following in localrc:
-        # CINDER_DRIVER=glusterfs
-        # CINDER_GLUSTERFS_SHARES="127.0.0.1:/vol1;127.0.0.1:/vol2"
-        # Shares are <host>:<volume> and separated by semicolons.
-
-        iniset $CINDER_CONF DEFAULT volume_driver "cinder.volume.drivers.glusterfs.GlusterfsDriver"
-        iniset $CINDER_CONF DEFAULT glusterfs_shares_config "$CINDER_CONF_DIR/glusterfs_shares"
-        touch $CINDER_CONF_DIR/glusterfs_shares
-        if [ ! -z "$CINDER_GLUSTERFS_SHARES" ]; then
-            CINDER_GLUSTERFS_SHARES=$(echo $CINDER_GLUSTERFS_SHARES | tr ";" "\n")
-            echo "$CINDER_GLUSTERFS_SHARES" > $CINDER_CONF_DIR/glusterfs_shares
-        fi
-    elif [ "$CINDER_DRIVER" == "vsphere" ]; then
-        echo_summary "Using VMware vCenter driver"
-        iniset $CINDER_CONF DEFAULT vmware_host_ip "$VMWAREAPI_IP"
-        iniset $CINDER_CONF DEFAULT vmware_host_username "$VMWAREAPI_USER"
-        iniset $CINDER_CONF DEFAULT vmware_host_password "$VMWAREAPI_PASSWORD"
-        iniset $CINDER_CONF DEFAULT volume_driver "cinder.volume.drivers.vmware.vmdk.VMwareVcVmdkDriver"
+    if [[ -r $CINDER_PLUGINS/$CINDER_DRIVER ]]; then
+        configure_cinder_driver
     fi
 
     if [[ is_fedora && $DISTRO =~ (rhel6) ]]; then
@@ -360,60 +328,59 @@ function configure_cinder() {
 # service              cinder     admin        # if enabled
 
 # Migrated from keystone_data.sh
-create_cinder_accounts() {
+function create_cinder_accounts {
 
-    SERVICE_TENANT=$(keystone tenant-list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
-    ADMIN_ROLE=$(keystone role-list | awk "/ admin / { print \$2 }")
+    SERVICE_TENANT=$(openstack project list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
+    ADMIN_ROLE=$(openstack role list | awk "/ admin / { print \$2 }")
 
     # Cinder
     if [[ "$ENABLED_SERVICES" =~ "c-api" ]]; then
-        CINDER_USER=$(keystone user-create \
-            --name=cinder \
-            --pass="$SERVICE_PASSWORD" \
-            --tenant-id $SERVICE_TENANT \
-            --email=cinder@example.com \
+        CINDER_USER=$(openstack user create \
+            cinder \
+            --password "$SERVICE_PASSWORD" \
+            --project $SERVICE_TENANT \
+            --email cinder@example.com \
             | grep " id " | get_field 2)
-        keystone user-role-add \
-            --tenant-id $SERVICE_TENANT \
-            --user-id $CINDER_USER \
-            --role-id $ADMIN_ROLE
+        openstack role add \
+            $ADMIN_ROLE \
+            --project $SERVICE_TENANT \
+            --user $CINDER_USER
         if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
-            CINDER_SERVICE=$(keystone service-create \
-                --name=cinder \
+            CINDER_SERVICE=$(openstack service create \
+                cinder \
                 --type=volume \
                 --description="Cinder Volume Service" \
                 | grep " id " | get_field 2)
-            keystone endpoint-create \
+            openstack endpoint create \
+                $CINDER_SERVICE \
                 --region RegionOne \
-                --service_id $CINDER_SERVICE \
                 --publicurl "$CINDER_SERVICE_PROTOCOL://$CINDER_SERVICE_HOST:$CINDER_SERVICE_PORT/v1/\$(tenant_id)s" \
                 --adminurl "$CINDER_SERVICE_PROTOCOL://$CINDER_SERVICE_HOST:$CINDER_SERVICE_PORT/v1/\$(tenant_id)s" \
                 --internalurl "$CINDER_SERVICE_PROTOCOL://$CINDER_SERVICE_HOST:$CINDER_SERVICE_PORT/v1/\$(tenant_id)s"
-            CINDER_V2_SERVICE=$(keystone service-create \
-                --name=cinderv2 \
+            CINDER_V2_SERVICE=$(openstack service create \
+                cinderv2 \
                 --type=volumev2 \
                 --description="Cinder Volume Service V2" \
                 | grep " id " | get_field 2)
-            keystone endpoint-create \
+            openstack endpoint create \
+                $CINDER_V2_SERVICE \
                 --region RegionOne \
-                --service_id $CINDER_V2_SERVICE \
                 --publicurl "$CINDER_SERVICE_PROTOCOL://$CINDER_SERVICE_HOST:$CINDER_SERVICE_PORT/v2/\$(tenant_id)s" \
                 --adminurl "$CINDER_SERVICE_PROTOCOL://$CINDER_SERVICE_HOST:$CINDER_SERVICE_PORT/v2/\$(tenant_id)s" \
                 --internalurl "$CINDER_SERVICE_PROTOCOL://$CINDER_SERVICE_HOST:$CINDER_SERVICE_PORT/v2/\$(tenant_id)s"
-
         fi
     fi
 }
 
 # create_cinder_cache_dir() - Part of the init_cinder() process
-function create_cinder_cache_dir() {
+function create_cinder_cache_dir {
     # Create cache dir
     sudo mkdir -p $CINDER_AUTH_CACHE_DIR
     sudo chown $STACK_USER $CINDER_AUTH_CACHE_DIR
     rm -f $CINDER_AUTH_CACHE_DIR/*
 }
 
-create_cinder_volume_group() {
+function create_cinder_volume_group {
     # According to the ``CINDER_MULTI_LVM_BACKEND`` value, configure one or two default volumes
     # group called ``stack-volumes`` (and ``stack-volumes2``) for the volume
     # service if it (they) does (do) not yet exist. If you don't wish to use a
@@ -461,7 +428,7 @@ create_cinder_volume_group() {
 }
 
 # init_cinder() - Initialize database and volume group
-function init_cinder() {
+function init_cinder {
     # Force nova volumes off
     NOVA_ENABLED_APIS=$(echo $NOVA_ENABLED_APIS | sed "s/osapi_volume,//")
 
@@ -497,20 +464,20 @@ function init_cinder() {
 }
 
 # install_cinder() - Collect source and prepare
-function install_cinder() {
+function install_cinder {
     git_clone $CINDER_REPO $CINDER_DIR $CINDER_BRANCH
     setup_develop $CINDER_DIR
 }
 
 # install_cinderclient() - Collect source and prepare
-function install_cinderclient() {
+function install_cinderclient {
     git_clone $CINDERCLIENT_REPO $CINDERCLIENT_DIR $CINDERCLIENT_BRANCH
     setup_develop $CINDERCLIENT_DIR
     sudo install -D -m 0644 -o $STACK_USER {$CINDERCLIENT_DIR/tools/,/etc/bash_completion.d/}cinder.bash_completion
 }
 
 # apply config.d approach for cinder volumes directory
-function _configure_tgt_for_config_d() {
+function _configure_tgt_for_config_d {
     if [[ ! -d /etc/tgt/stack.d/ ]]; then
         sudo ln -sf $CINDER_STATE_PATH/volumes /etc/tgt/stack.d
         echo "include /etc/tgt/stack.d/*" | sudo tee -a /etc/tgt/targets.conf
@@ -518,7 +485,7 @@ function _configure_tgt_for_config_d() {
 }
 
 # start_cinder() - Start running processes, including screen
-function start_cinder() {
+function start_cinder {
     if is_service_enabled c-vol; then
         # Delete any old stack.conf
         sudo rm -f /etc/tgt/conf.d/stack.conf
@@ -529,8 +496,12 @@ function start_cinder() {
             sudo stop tgt || true
             sudo start tgt
         elif is_fedora; then
-            # bypass redirection to systemctl during restart
-            sudo /sbin/service --skip-redirect tgtd restart
+            if [[ $DISTRO =~ (rhel6) ]]; then
+                sudo /sbin/service tgtd restart
+            else
+                # bypass redirection to systemctl during restart
+                sudo /sbin/service --skip-redirect tgtd restart
+            fi
         elif is_suse; then
             restart_service tgtd
         else
@@ -558,7 +529,7 @@ function start_cinder() {
 }
 
 # stop_cinder() - Stop running processes
-function stop_cinder() {
+function stop_cinder {
     # Kill the cinder screen windows
     for serv in c-api c-bak c-sch c-vol; do
         screen_stop $serv

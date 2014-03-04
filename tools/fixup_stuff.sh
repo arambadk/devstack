@@ -40,7 +40,7 @@ FILES=$TOP_DIR/files
 # ---------------
 
 # get_package_path python-package    # in import notation
-function get_package_path() {
+function get_package_path {
     local package=$1
     echo $(python -c "import os; import $package; print(os.path.split(os.path.realpath($package.__file__))[0])")
 }
@@ -70,7 +70,8 @@ if [[ -d $dir ]]; then
 fi
 
 # Ubuntu 12.04
-# -----
+# ------------
+
 # We can regularly get kernel crashes on the 12.04 default kernel, so attempt
 # to install a new kernel
 if [[ ${DISTRO} =~ (precise) ]]; then

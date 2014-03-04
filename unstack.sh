@@ -55,7 +55,6 @@ source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/neutron
 source $TOP_DIR/lib/baremetal
 source $TOP_DIR/lib/ldap
-source $TOP_DIR/lib/ironic
 
 # Extras Source
 # --------------
@@ -104,7 +103,7 @@ if is_service_enabled nova; then
     stop_nova
 fi
 
-if is_service_enabled g-api g-reg; then
+if is_service_enabled glance; then
     stop_glance
 fi
 
@@ -118,12 +117,6 @@ if is_service_enabled s-proxy; then
     cleanup_swift
 fi
 
-# Ironic runs daemons
-if is_service_enabled ir-api ir-cond; then
-    stop_ironic
-    cleanup_ironic
-fi
-
 # Apache has the WSGI processes
 if is_service_enabled horizon; then
     stop_horizon
@@ -132,11 +125,6 @@ fi
 # Kill TLS proxies
 if is_service_enabled tls-proxy; then
     killall stud
-fi
-
-# baremetal might have created a fake environment
-if is_service_enabled baremetal && [[ "$BM_USE_FAKE_ENV" = "True" ]]; then
-    cleanup_fake_baremetal_env
 fi
 
 SCSI_PERSIST_DIR=$CINDER_STATE_PATH/volumes/*

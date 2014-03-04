@@ -30,10 +30,9 @@ source $TOP_DIR/functions
 # Import configuration
 source $TOP_DIR/openrc
 
-# Import neutron functions if needed
-if is_service_enabled neutron; then
-    source $TOP_DIR/lib/neutron
-fi
+# Import project functions
+source $TOP_DIR/lib/cinder
+source $TOP_DIR/lib/neutron
 
 # Import exercise configuration
 source $TOP_DIR/exerciserc

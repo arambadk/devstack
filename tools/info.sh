@@ -61,7 +61,7 @@ fi
 # -----
 
 # git_report <dir>
-function git_report() {
+function git_report {
     local dir=$1
     local proj ref branch head
     if [[ -d $dir/.git ]]; then
@@ -122,13 +122,11 @@ while read line; do
             ver=${BASH_REMATCH[2]}
         else
             # Unhandled format in freeze file
-            #echo "unknown: $p"
             continue
         fi
         echo "pip|${p}|${ver}"
     else
         # No match in freeze file
-        #echo "unknown: $p"
         continue
     fi
 done <$FREEZE_FILE

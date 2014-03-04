@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
-
+# Copyright 2012, Cisco Systems
+# Copyright 2012, VMware, Inc.
+# Copyright 2012, NTT MCL, Inc.
+#
+# Please direct any questions to dedutta@cisco.com, dwendlandt@vmware.com, nachi@nttmcl.com
+#
 # **neutron-adv-test.sh**
 
 # Perform integration testing of Nova and other components with Neutron.
@@ -15,7 +20,7 @@ echo "*********************************************************************"
 set -o errtrace
 
 trap failed ERR
-failed() {
+function failed {
     local r=$?
     set +o errtrace
     set +o xtrace
@@ -390,7 +395,7 @@ function test_functions {
 # Usage and main
 # --------------
 
-usage() {
+function usage {
     echo "$0: [-h]"
     echo "  -h, --help              Display help message"
     echo "  -t, --tenant            Create tenants"
@@ -403,17 +408,9 @@ usage() {
     echo "  -T, --test              Test functions"
 }
 
-main() {
+function main {
 
     echo Description
-    echo
-    echo Copyright 2012, Cisco Systems
-    echo Copyright 2012, VMware, Inc.
-    echo Copyright 2012, NTT MCL, Inc.
-    echo
-    echo Please direct any questions to dedutta@cisco.com, dwendlandt@vmware.com, nachi@nttmcl.com
-    echo
-
 
     if [ $# -eq 0 ] ; then
         # if no args are provided, run all tests

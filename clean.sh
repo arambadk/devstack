@@ -97,14 +97,9 @@ if is_service_enabled ldap; then
 fi
 
 # Do the hypervisor cleanup until this can be moved back into lib/nova
-if [[ -r $NOVA_PLUGINS/hypervisor-$VIRT_DRIVER ]]; then
+if is_service_enabled nova && [[ -r $NOVA_PLUGINS/hypervisor-$VIRT_DRIVER ]]; then
     cleanup_nova_hypervisor
 fi
-
-#if mount | grep $DATA_DIR/swift/drives; then
-#  sudo umount $DATA_DIR/swift/drives/sdb1
-#fi
-
 
 # Clean out /etc
 sudo rm -rf /etc/keystone /etc/glance /etc/nova /etc/cinder /etc/swift
@@ -123,9 +118,11 @@ if [[ -n "$SCREEN_LOGDIR" ]] && [[ -d "$SCREEN_LOGDIR" ]]; then
     sudo rm -rf $SCREEN_LOGDIR
 fi
 
-# Clean up networking...
-# should this be in nova?
-# FIXED_IP_ADDR in br100
-
 # Clean up files
-rm -f $TOP_DIR/.stackenv
+
+FILES_TO_CLEAN=".localrc.auto docs-files docs/ shocco/ stack-screenrc test*.conf* test.ini*"
+FILES_TO_CLEAN+=".stackenv .prereqs"
+
+for file in $FILES_TO_CLEAN; do
+    rm -f $TOP_DIR/$file
+done

@@ -2,7 +2,8 @@
 # Install and start **Marconi** service
 
 # To enable a minimal set of Marconi services, add the following to localrc:
-#   enable_service marconi-server
+#
+#     enable_service marconi-server
 #
 # Dependencies:
 # - functions
@@ -51,22 +52,40 @@ MARCONI_BRANCH=${MARCONI_BRANCH:-master}
 MARCONICLIENT_REPO=${MARCONICLIENT_REPO:-${GIT_BASE}/openstack/python-marconiclient.git}
 MARCONICLIENT_BRANCH=${MARCONICLIENT_BRANCH:-master}
 
+# Set Marconi Connection Info
+MARCONI_SERVICE_HOST=${MARCONI_SERVICE_HOST:-$SERVICE_HOST}
+MARCONI_SERVICE_PORT=${MARCONI_SERVICE_PORT:-8888}
+MARCONI_SERVICE_PROTOCOL=${MARCONI_SERVICE_PROTOCOL:-$SERVICE_PROTOCOL}
+
+# Tell Tempest this project is present
+TEMPEST_SERVICES+=,marconi
+
+
 # Functions
 # ---------
 
+# Test if any Marconi services are enabled
+# is_marconi_enabled
+function is_marconi_enabled {
+    [[ ,${ENABLED_SERVICES} =~ ,"marconi-" ]] && return 0
+    return 1
+}
+
 # cleanup_marconi() - Remove residual data files, anything left over from previous
 # runs that a clean run would need to clean up
-function cleanup_marconi() {
-    mongo marconi --eval "db.dropDatabase();"
+function cleanup_marconi {
+    if ! timeout $SERVICE_TIMEOUT sh -c "while ! mongo marconi --eval 'db.dropDatabase();'; do sleep 1; done"; then
+        die $LINENO "Mongo DB did not start"
+    fi
 }
 
 # configure_marconiclient() - Set config files, create data dirs, etc
-function configure_marconiclient() {
+function configure_marconiclient {
     setup_develop $MARCONICLIENT_DIR
 }
 
 # configure_marconi() - Set config files, create data dirs, etc
-function configure_marconi() {
+function configure_marconi {
     setup_develop $MARCONI_DIR
 
     [ ! -d $MARCONI_CONF_DIR ] && sudo mkdir -m 755 -p $MARCONI_CONF_DIR
@@ -76,11 +95,8 @@ function configure_marconi() {
     sudo chown $USER $MARCONI_API_LOG_DIR
 
     iniset $MARCONI_CONF DEFAULT verbose True
-    iniset $MARCONI_CONF 'drivers:transport:wsgi' bind '0.0.0.0'
-
-    # Install the policy file for the API server
-    cp $MARCONI_DIR/etc/marconi/policy.json $MARCONI_CONF_DIR
-    iniset $MARCONI_CONF DEFAULT policy_file $MARCONI_CONF_DIR/policy.json
+    iniset $MARCONI_CONF DEFAULT use_syslog $SYSLOG
+    iniset $MARCONI_CONF 'drivers:transport:wsgi' bind $MARCONI_SERVICE_HOST
 
     iniset $MARCONI_CONF keystone_authtoken auth_protocol http
     iniset $MARCONI_CONF keystone_authtoken admin_user marconi
@@ -95,16 +111,23 @@ function configure_marconi() {
     fi
 }
 
-function configure_mongodb() {
+function configure_mongodb {
     # Set nssize to 2GB. This increases the number of namespaces supported
     # # per database.
-    sudo sed -i '/--nssize/!s/OPTIONS=\"/OPTIONS=\"--nssize 2047 /' /etc/sysconfig/mongod
-
-    restart_service mongod
+    if is_ubuntu; then
+        sudo sed -i -e "
+            s|[^ \t]*#[ \t]*\(nssize[ \t]*=.*\$\)|\1|
+            s|^\(nssize[ \t]*=[ \t]*\).*\$|\1 2047|
+        " /etc/mongodb.conf
+        restart_service mongodb
+    elif is_fedora; then
+        sudo sed -i '/--nssize/!s/OPTIONS=\"/OPTIONS=\"--nssize 2047 /' /etc/sysconfig/mongod
+        restart_service mongod
+    fi
 }
 
 # init_marconi() - Initialize etc.
-function init_marconi() {
+function init_marconi {
     # Create cache dir
     sudo mkdir -p $MARCONI_AUTH_CACHE_DIR
     sudo chown $STACK_USER $MARCONI_AUTH_CACHE_DIR
@@ -112,53 +135,61 @@ function init_marconi() {
 }
 
 # install_marconi() - Collect source and prepare
-function install_marconi() {
+function install_marconi {
     git_clone $MARCONI_REPO $MARCONI_DIR $MARCONI_BRANCH
     setup_develop $MARCONI_DIR
 }
 
 # install_marconiclient() - Collect source and prepare
-function install_marconiclient() {
+function install_marconiclient {
     git_clone $MARCONICLIENT_REPO $MARCONICLIENT_DIR $MARCONICLIENT_BRANCH
     setup_develop $MARCONICLIENT_DIR
 }
 
 # start_marconi() - Start running processes, including screen
-function start_marconi() {
+function start_marconi {
     screen_it marconi-server "marconi-server --config-file $MARCONI_CONF"
+    echo "Waiting for Marconi to start..."
+    if ! timeout $SERVICE_TIMEOUT sh -c "while ! wget --no-proxy -q -O- $MARCONI_SERVICE_PROTOCOL://$MARCONI_SERVICE_HOST:$MARCONI_SERVICE_PORT/v1/health; do sleep 1; done"; then
+        die $LINENO "Marconi did not start"
+    fi
 }
 
 # stop_marconi() - Stop running processes
-function stop_marconi() {
+function stop_marconi {
     # Kill the marconi screen windows
     for serv in marconi-server; do
         screen -S $SCREEN_NAME -p $serv -X kill
     done
 }
 
-function create_marconi_accounts() {
-    SERVICE_TENANT=$(keystone tenant-list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
-    ADMIN_ROLE=$(keystone role-list | awk "/ admin / { print \$2 }")
+function create_marconi_accounts {
+    SERVICE_TENANT=$(openstack project list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
+    ADMIN_ROLE=$(openstack role list | awk "/ admin / { print \$2 }")
 
-    MARCONI_USER=$(get_id keystone user-create --name=marconi \
-                                                --pass="$SERVICE_PASSWORD" \
-                                                --tenant-id $SERVICE_TENANT \
-                                                --email=marconi@example.com)
-    keystone user-role-add --tenant-id $SERVICE_TENANT \
-                            --user-id $MARCONI_USER \
-                            --role-id $ADMIN_ROLE
+    MARCONI_USER=$(openstack user create \
+        marconi \
+        --password "$SERVICE_PASSWORD" \
+        --project $SERVICE_TENANT \
+        --email marconi@example.com \
+        | grep " id " | get_field 2)
+    openstack role add \
+        $ADMIN_ROLE \
+        --project $SERVICE_TENANT \
+        --user $MARCONI_USER
+
     if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
-        MARCONI_SERVICE=$(keystone service-create \
-            --name=marconi \
+        MARCONI_SERVICE=$(openstack service create \
+            marconi \
             --type=queuing \
             --description="Marconi Service" \
             | grep " id " | get_field 2)
-        keystone endpoint-create \
+        openstack endpoint create \
+            $MARCONI_SERVICE \
             --region RegionOne \
-            --service_id $MARCONI_SERVICE \
-            --publicurl "http://$SERVICE_HOST:8888" \
-            --adminurl "http://$SERVICE_HOST:8888" \
-            --internalurl "http://$SERVICE_HOST:8888"
+            --publicurl "$MARCONI_SERVICE_PROTOCOL://$MARCONI_SERVICE_HOST:$MARCONI_SERVICE_PORT" \
+            --adminurl "$MARCONI_SERVICE_PROTOCOL://$MARCONI_SERVICE_HOST:$MARCONI_SERVICE_PORT" \
+            --internalurl "$MARCONI_SERVICE_PROTOCOL://$MARCONI_SERVICE_HOST:$MARCONI_SERVICE_PORT"
     fi
 
 }

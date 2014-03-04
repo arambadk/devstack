@@ -10,6 +10,7 @@
 # configure_savanna
 # start_savanna
 # stop_savanna
+# cleanup_savanna
 
 # Save trace setting
 XTRACE=$(set +o | grep xtrace)
@@ -26,12 +27,14 @@ SAVANNA_BRANCH=${SAVANNA_BRANCH:-master}
 # Set up default directories
 SAVANNA_DIR=$DEST/savanna
 SAVANNA_CONF_DIR=${SAVANNA_CONF_DIR:-/etc/savanna}
-SAVANNA_CONF_FILE=savanna.conf
+SAVANNA_CONF_FILE=${SAVANNA_CONF_DIR}/savanna.conf
 SAVANNA_DEBUG=${SAVANNA_DEBUG:-True}
 
 SAVANNA_SERVICE_HOST=${SAVANNA_SERVICE_HOST:-$SERVICE_HOST}
 SAVANNA_SERVICE_PORT=${SAVANNA_SERVICE_PORT:-8386}
 SAVANNA_SERVICE_PROTOCOL=${SAVANNA_SERVICE_PROTOCOL:-$SERVICE_PROTOCOL}
+
+SAVANNA_AUTH_CACHE_DIR=${SAVANNA_AUTH_CACHE_DIR:-/var/cache/savanna}
 
 # Support entry points installation of console scripts
 if [[ -d $SAVANNA_DIR/bin ]]; then
@@ -39,6 +42,10 @@ if [[ -d $SAVANNA_DIR/bin ]]; then
 else
     SAVANNA_BIN_DIR=$(get_python_exec_prefix)
 fi
+
+# Tell Tempest this project is present
+TEMPEST_SERVICES+=,savanna
+
 
 # Functions
 # ---------
@@ -48,39 +55,47 @@ fi
 # Tenant      User       Roles
 # ------------------------------
 # service     savanna    admin
-function create_savanna_accounts() {
+function create_savanna_accounts {
 
-    SERVICE_TENANT=$(keystone tenant-list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
-    ADMIN_ROLE=$(keystone role-list | awk "/ admin / { print \$2 }")
+    SERVICE_TENANT=$(openstack project list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
+    ADMIN_ROLE=$(openstack role list | awk "/ admin / { print \$2 }")
 
-    SAVANNA_USER=$(keystone user-create \
-        --name=savanna \
-        --pass="$SERVICE_PASSWORD" \
-        --tenant-id $SERVICE_TENANT \
-        --email=savanna@example.com \
+    SAVANNA_USER=$(openstack user create \
+        savanna \
+        --password "$SERVICE_PASSWORD" \
+        --project $SERVICE_TENANT \
+        --email savanna@example.com \
         | grep " id " | get_field 2)
-    keystone user-role-add \
-        --tenant-id $SERVICE_TENANT \
-        --user-id $SAVANNA_USER \
-        --role-id $ADMIN_ROLE
+    openstack role add \
+        $ADMIN_ROLE \
+        --project $SERVICE_TENANT \
+        --user $SAVANNA_USER
 
     if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
-        SAVANNA_SERVICE=$(keystone service-create \
-            --name=savanna \
+        SAVANNA_SERVICE=$(openstack service create \
+            savanna \
             --type=data_processing \
             --description="Savanna Data Processing" \
             | grep " id " | get_field 2)
-        keystone endpoint-create \
+        openstack endpoint create \
+            $SAVANNA_SERVICE \
             --region RegionOne \
-            --service_id $SAVANNA_SERVICE \
             --publicurl "$SAVANNA_SERVICE_PROTOCOL://$SAVANNA_SERVICE_HOST:$SAVANNA_SERVICE_PORT/v1.1/\$(tenant_id)s" \
             --adminurl "$SAVANNA_SERVICE_PROTOCOL://$SAVANNA_SERVICE_HOST:$SAVANNA_SERVICE_PORT/v1.1/\$(tenant_id)s" \
             --internalurl "$SAVANNA_SERVICE_PROTOCOL://$SAVANNA_SERVICE_HOST:$SAVANNA_SERVICE_PORT/v1.1/\$(tenant_id)s"
     fi
 }
 
+# cleanup_savanna() - Remove residual data files, anything left over from
+# previous runs that would need to clean up.
+function cleanup_savanna {
+
+    # Cleanup auth cache dir
+    sudo rm -rf $SAVANNA_AUTH_CACHE_DIR
+}
+
 # configure_savanna() - Set config files, create data dirs, etc
-function configure_savanna() {
+function configure_savanna {
 
     if [[ ! -d $SAVANNA_CONF_DIR ]]; then
         sudo mkdir -p $SAVANNA_CONF_DIR
@@ -88,39 +103,63 @@ function configure_savanna() {
     sudo chown $STACK_USER $SAVANNA_CONF_DIR
 
     # Copy over savanna configuration file and configure common parameters.
-    cp $SAVANNA_DIR/etc/savanna/savanna.conf.sample $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE
+    cp $SAVANNA_DIR/etc/savanna/savanna.conf.sample $SAVANNA_CONF_FILE
 
-    iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT os_admin_password $SERVICE_PASSWORD
-    iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT os_admin_username savanna
-    iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT os_admin_tenant_name $SERVICE_TENANT_NAME
-    iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT debug $SAVANNA_DEBUG
+    # Create auth cache dir
+    sudo mkdir -p $SAVANNA_AUTH_CACHE_DIR
+    sudo chown $STACK_USER $SAVANNA_AUTH_CACHE_DIR
+    rm -rf $SAVANNA_AUTH_CACHE_DIR/*
 
-    iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE database connection `database_connection_url savanna`
+    # Set obsolete keystone auth configs for backward compatibility
+    iniset $SAVANNA_CONF_FILE DEFAULT os_auth_host $KEYSTONE_SERVICE_HOST
+    iniset $SAVANNA_CONF_FILE DEFAULT os_auth_port $KEYSTONE_SERVICE_PORT
+    iniset $SAVANNA_CONF_FILE DEFAULT os_auth_protocol $KEYSTONE_SERVICE_PROTOCOL
+    iniset $SAVANNA_CONF_FILE DEFAULT os_admin_password $SERVICE_PASSWORD
+    iniset $SAVANNA_CONF_FILE DEFAULT os_admin_username savanna
+    iniset $SAVANNA_CONF_FILE DEFAULT os_admin_tenant_name $SERVICE_TENANT_NAME
+
+    # Set actual keystone auth configs
+    iniset $SAVANNA_CONF_FILE keystone_authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/
+    iniset $SAVANNA_CONF_FILE keystone_authtoken admin_tenant_name $SERVICE_TENANT_NAME
+    iniset $SAVANNA_CONF_FILE keystone_authtoken admin_user savanna
+    iniset $SAVANNA_CONF_FILE keystone_authtoken admin_password $SERVICE_PASSWORD
+    iniset $SAVANNA_CONF_FILE keystone_authtoken signing_dir $SAVANNA_AUTH_CACHE_DIR
+    iniset $SAVANNA_CONF_FILE keystone_authtoken cafile $KEYSTONE_SSL_CA
+
+    iniset $SAVANNA_CONF_FILE DEFAULT debug $SAVANNA_DEBUG
+
+    iniset $SAVANNA_CONF_FILE database connection `database_connection_url savanna`
 
     if is_service_enabled neutron; then
-        iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT use_neutron true
-        iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT use_floating_ips true
+        iniset $SAVANNA_CONF_FILE DEFAULT use_neutron true
+        iniset $SAVANNA_CONF_FILE DEFAULT use_floating_ips true
     fi
 
-    iniset $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE DEFAULT use_syslog $SYSLOG
+    if is_service_enabled heat; then
+        iniset $SAVANNA_CONF_FILE DEFAULT infrastructure_engine heat
+    else
+        iniset $SAVANNA_CONF_FILE DEFAULT infrastructure_engine savanna
+    fi
+
+    iniset $SAVANNA_CONF_FILE DEFAULT use_syslog $SYSLOG
 
     recreate_database savanna utf8
-    $SAVANNA_BIN_DIR/savanna-db-manage --config-file $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE upgrade head
+    $SAVANNA_BIN_DIR/savanna-db-manage --config-file $SAVANNA_CONF_FILE upgrade head
 }
 
 # install_savanna() - Collect source and prepare
-function install_savanna() {
+function install_savanna {
     git_clone $SAVANNA_REPO $SAVANNA_DIR $SAVANNA_BRANCH
     setup_develop $SAVANNA_DIR
 }
 
 # start_savanna() - Start running processes, including screen
-function start_savanna() {
-    screen_it savanna "cd $SAVANNA_DIR && $SAVANNA_BIN_DIR/savanna-api --config-file $SAVANNA_CONF_DIR/$SAVANNA_CONF_FILE"
+function start_savanna {
+    screen_it savanna "cd $SAVANNA_DIR && $SAVANNA_BIN_DIR/savanna-api --config-file $SAVANNA_CONF_FILE"
 }
 
 # stop_savanna() - Stop running processes
-function stop_savanna() {
+function stop_savanna {
     # Kill the Savanna screen windows
     screen -S $SCREEN_NAME -p savanna -X kill
 }

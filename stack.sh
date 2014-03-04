@@ -5,11 +5,12 @@
 # **Glance**, **Heat**, **Horizon**, **Keystone**, **Nova**, **Neutron**,
 # and **Swift**
 
-# This script allows you to specify configuration options of what git
-# repositories to use, enabled services, network configuration and various
-# passwords.  If you are crafty you can run the script on multiple nodes using
-# shared settings for common resources (mysql, rabbitmq) and build a multi-node
-# developer install.
+# This script's options can be changed by setting appropriate environment
+# variables.  You can configure things like which git repositories to use,
+# services to enable, OS images to use, etc.  Default values are located in the
+# ``stackrc`` file. If you are crafty you can run the script on multiple nodes
+# using shared settings for common resources (eg., mysql or rabbitmq) and build
+# a multi-node developer install.
 
 # To keep this script simple we assume you are running on a recent **Ubuntu**
 # (12.04 Precise or newer) or **Fedora** (F18 or newer) machine.  (It may work
@@ -29,6 +30,9 @@ unset LANG
 unset LANGUAGE
 LC_ALL=C
 export LC_ALL
+
+# Make sure umask is sane
+umask 022
 
 # Keep track of the devstack directory
 TOP_DIR=$(cd $(dirname "$0") && pwd)
@@ -161,42 +165,6 @@ fi
 # Set up logging level
 VERBOSE=$(trueorfalse True $VERBOSE)
 
-
-# Additional repos
-# ================
-
-# Some distros need to add repos beyond the defaults provided by the vendor
-# to pick up required packages.
-
-# The Debian Wheezy official repositories do not contain all required packages,
-# add gplhost repository.
-if [[ "$os_VENDOR" =~ (Debian) ]]; then
-    echo 'deb http://archive.gplhost.com/debian grizzly main' | sudo tee /etc/apt/sources.list.d/gplhost_wheezy-backports.list
-    echo 'deb http://archive.gplhost.com/debian grizzly-backports main' | sudo tee -a /etc/apt/sources.list.d/gplhost_wheezy-backports.list
-    apt_get update
-    apt_get install --force-yes gplhost-archive-keyring
-fi
-
-if [[ is_fedora && $DISTRO =~ (rhel6) ]]; then
-    # Installing Open vSwitch on RHEL6 requires enabling the RDO repo.
-    RHEL6_RDO_REPO_RPM=${RHEL6_RDO_REPO_RPM:-"http://rdo.fedorapeople.org/openstack-havana/rdo-release-havana.rpm"}
-    RHEL6_RDO_REPO_ID=${RHEL6_RDO_REPO_ID:-"openstack-havana"}
-    if ! yum repolist enabled $RHEL6_RDO_REPO_ID | grep -q $RHEL6_RDO_REPO_ID; then
-        echo "RDO repo not detected; installing"
-        yum_install $RHEL6_RDO_REPO_RPM || \
-            die $LINENO "Error installing RDO repo, cannot continue"
-    fi
-
-    # RHEL6 requires EPEL for many Open Stack dependencies
-    RHEL6_EPEL_RPM=${RHEL6_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"}
-    if ! yum repolist enabled epel | grep -q 'epel'; then
-        echo "EPEL not detected; installing"
-        yum_install ${RHEL6_EPEL_RPM} || \
-            die $LINENO "Error installing EPEL repo, cannot continue"
-    fi
-fi
-
-
 # root Access
 # -----------
 
@@ -231,6 +199,47 @@ chmod 0440 $TEMPFILE
 sudo chown root:root $TEMPFILE
 sudo mv $TEMPFILE /etc/sudoers.d/50_stack_sh
 
+# Additional repos
+# ----------------
+
+# Some distros need to add repos beyond the defaults provided by the vendor
+# to pick up required packages.
+
+# The Debian Wheezy official repositories do not contain all required packages,
+# add gplhost repository.
+if [[ "$os_VENDOR" =~ (Debian) ]]; then
+    echo 'deb http://archive.gplhost.com/debian grizzly main' | sudo tee /etc/apt/sources.list.d/gplhost_wheezy-backports.list
+    echo 'deb http://archive.gplhost.com/debian grizzly-backports main' | sudo tee -a /etc/apt/sources.list.d/gplhost_wheezy-backports.list
+    apt_get update
+    apt_get install --force-yes gplhost-archive-keyring
+fi
+
+if [[ is_fedora && $DISTRO =~ (rhel6) ]]; then
+    # Installing Open vSwitch on RHEL6 requires enabling the RDO repo.
+    RHEL6_RDO_REPO_RPM=${RHEL6_RDO_REPO_RPM:-"http://rdo.fedorapeople.org/openstack-havana/rdo-release-havana.rpm"}
+    RHEL6_RDO_REPO_ID=${RHEL6_RDO_REPO_ID:-"openstack-havana"}
+    if ! sudo yum repolist enabled $RHEL6_RDO_REPO_ID | grep -q $RHEL6_RDO_REPO_ID; then
+        echo "RDO repo not detected; installing"
+        yum_install $RHEL6_RDO_REPO_RPM || \
+            die $LINENO "Error installing RDO repo, cannot continue"
+    fi
+
+    # RHEL6 requires EPEL for many Open Stack dependencies
+    RHEL6_EPEL_RPM=${RHEL6_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"}
+    if ! sudo yum repolist enabled epel | grep -q 'epel'; then
+        echo "EPEL not detected; installing"
+        yum_install ${RHEL6_EPEL_RPM} || \
+            die $LINENO "Error installing EPEL repo, cannot continue"
+    fi
+
+    # ... and also optional to be enabled
+    is_package_installed yum-utils || install_package yum-utils
+    sudo yum-config-manager --enable rhel-6-server-optional-rpms
+
+fi
+
+# Filesystem setup
+# ----------------
 
 # Create the destination directory and ensure it is writable by the user
 # and read/executable by everybody for daemons (e.g. apache run for horizon)
@@ -248,6 +257,15 @@ if [ -z "`grep ^127.0.0.1 /etc/hosts | grep $LOCAL_HOSTNAME`" ]; then
     sudo sed -i "s/\(^127.0.0.1.*\)/\1 $LOCAL_HOSTNAME/" /etc/hosts
 fi
 
+# Destination path for service data
+DATA_DIR=${DATA_DIR:-${DEST}/data}
+sudo mkdir -p $DATA_DIR
+safe_chown -R $STACK_USER $DATA_DIR
+
+
+# Common Configuration
+# --------------------
+
 # Set ``OFFLINE`` to ``True`` to configure ``stack.sh`` to run cleanly without
 # Internet access. ``stack.sh`` must have been previously run with Internet
 # access to install prerequisites and fetch repositories.
@@ -260,15 +278,6 @@ ERROR_ON_CLONE=`trueorfalse False $ERROR_ON_CLONE`
 
 # Whether to enable the debug log level in OpenStack services
 ENABLE_DEBUG_LOG_LEVEL=`trueorfalse True $ENABLE_DEBUG_LOG_LEVEL`
-
-# Destination path for service data
-DATA_DIR=${DATA_DIR:-${DEST}/data}
-sudo mkdir -p $DATA_DIR
-safe_chown -R $STACK_USER $DATA_DIR
-
-
-# Common Configuration
-# ====================
 
 # Set fixed and floating range here so we can make sure not to use addresses
 # from either range when attempting to guess the IP to use for the host.
@@ -294,12 +303,8 @@ SYSLOG=`trueorfalse False $SYSLOG`
 SYSLOG_HOST=${SYSLOG_HOST:-$HOST_IP}
 SYSLOG_PORT=${SYSLOG_PORT:-516}
 
-# Enable sysstat logging
-SYSSTAT_FILE=${SYSSTAT_FILE:-"sysstat.dat"}
-SYSSTAT_INTERVAL=${SYSSTAT_INTERVAL:-"1"}
-
-PIDSTAT_FILE=${PIDSTAT_FILE:-"pidstat.txt"}
-PIDSTAT_INTERVAL=${PIDSTAT_INTERVAL:-"5"}
+# for DSTAT logging
+DSTAT_FILE=${DSTAT_FILE:-"dstat.txt"}
 
 # Use color for logging output (only available if syslog is not used)
 LOG_COLOR=`trueorfalse True $LOG_COLOR`
@@ -336,7 +341,6 @@ source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/neutron
 source $TOP_DIR/lib/baremetal
 source $TOP_DIR/lib/ldap
-source $TOP_DIR/lib/ironic
 
 # Extras Source
 # --------------
@@ -363,7 +367,11 @@ function read_password {
     var=$1; msg=$2
     pw=${!var}
 
-    localrc=$TOP_DIR/localrc
+    if [[ -f $RC_DIR/localrc ]]; then
+        localrc=$TOP_DIR/localrc
+    else
+        localrc=$TOP_DIR/.localrc.auto
+    fi
 
     # If the password is not defined yet, proceed to prompt user for a password.
     if [ ! $pw ]; then
@@ -461,7 +469,7 @@ fi
 # -----------------
 
 # Draw a spinner so the user knows something is happening
-function spinner() {
+function spinner {
     local delay=0.75
     local spinstr='/-\|'
     printf "..." >&3
@@ -476,7 +484,7 @@ function spinner() {
 
 # Echo text to the log file, summary log file and stdout
 # echo_summary "something to say"
-function echo_summary() {
+function echo_summary {
     if [[ -t 3 && "$VERBOSE" != "True" ]]; then
         kill >/dev/null 2>&1 $LAST_SPINNER_PID
         if [ ! -z "$LAST_SPINNER_PID" ]; then
@@ -492,7 +500,7 @@ function echo_summary() {
 
 # Echo text only to stdout, no log files
 # echo_nolog "something not for the logs"
-function echo_nolog() {
+function echo_nolog {
     echo $@ >&3
 }
 
@@ -523,15 +531,17 @@ if [[ -n "$LOGFILE" ]]; then
     exec 3>&1
     if [[ "$VERBOSE" == "True" ]]; then
         # Redirect stdout/stderr to tee to write the log file
-        exec 1> >( awk '
+        exec 1> >( awk -v logfile=${LOGFILE} '
+                /((set \+o$)|xtrace)/ { next }
                 {
-                    cmd ="date +\"%Y-%m-%d %H:%M:%S \""
+                    cmd ="date +\"%Y-%m-%d %H:%M:%S.%3N | \""
                     cmd | getline now
-                    close("date +\"%Y-%m-%d %H:%M:%S \"")
+                    close("date +\"%Y-%m-%d %H:%M:%S.%3N | \"")
                     sub(/^/, now)
                     print
-                    fflush()
-                }' | tee "${LOGFILE}" ) 2>&1
+                    print > logfile
+                    fflush("")
+                }' ) 2>&1
         # Set up a second fd for output
         exec 6> >( tee "${SUMFILE}" )
     else
@@ -579,23 +589,32 @@ fi
 # -----------------------
 
 # Kill background processes on exit
-trap clean EXIT
-clean() {
+trap exit_trap EXIT
+function exit_trap {
     local r=$?
-    kill >/dev/null 2>&1 $(jobs -p)
+    jobs=$(jobs -p)
+    if [[ -n $jobs ]]; then
+        echo "exit_trap: cleaning up child processes"
+        kill 2>&1 $jobs
+    fi
     exit $r
 }
-
 
 # Exit on any errors so that errors don't compound
-trap failed ERR
-failed() {
+trap err_trap ERR
+function err_trap {
     local r=$?
-    kill >/dev/null 2>&1 $(jobs -p)
     set +o xtrace
-    [ -n "$LOGFILE" ] && echo "${0##*/} failed: full log in $LOGFILE"
+    if [[ -n "$LOGFILE" ]]; then
+        echo "${0##*/} failed: full log in $LOGFILE"
+    else
+        echo "${0##*/} failed"
+    fi
     exit $r
 }
+
+
+set -o errexit
 
 # Print the commands being run so that we can see the command that triggers
 # an error.  It is also useful for following along as the install occurs.
@@ -746,11 +765,6 @@ if is_service_enabled tls-proxy; then
     # don't be naive and add to existing line!
 fi
 
-if is_service_enabled ir-api ir-cond; then
-    install_ironic
-    install_ironicclient
-    configure_ironic
-fi
 
 # Extras Install
 # --------------
@@ -862,35 +876,16 @@ fi
 # Initialize the directory for service status check
 init_service_check
 
-
-# Sysstat
+# Dstat
 # -------
 
-# If enabled, systat has to start early to track OpenStack service startup.
-if is_service_enabled sysstat; then
-    # what we want to measure
-    # -u : cpu statitics
-    # -q : load
-    # -b : io load rates
-    # -w : process creation and context switch rates
-    SYSSTAT_OPTS="-u -q -b -w"
-    if [[ -n ${SCREEN_LOGDIR} ]]; then
-        screen_it sysstat "cd $TOP_DIR; ./tools/sar_filter.py $SYSSTAT_OPTS -o $SCREEN_LOGDIR/$SYSSTAT_FILE $SYSSTAT_INTERVAL"
-    else
-        screen_it sysstat "./tools/sar_filter.py $SYSSTAT_OPTS $SYSSTAT_INTERVAL"
-    fi
+# A better kind of sysstat, with the top process per time slice
+DSTAT_OPTS="-tcndylp --top-cpu-adv"
+if [[ -n ${SCREEN_LOGDIR} ]]; then
+    screen_it dstat "cd $TOP_DIR; dstat $DSTAT_OPTS | tee $SCREEN_LOGDIR/$DSTAT_FILE"
+else
+    screen_it dstat "dstat $DSTAT_OPTS"
 fi
-
-if is_service_enabled pidstat; then
-    # Per-process stats
-    PIDSTAT_OPTS="-l -p ALL -T ALL"
-    if [[ -n ${SCREEN_LOGDIR} ]]; then
-        screen_it pidstat "cd $TOP_DIR; pidstat $PIDSTAT_OPTS $PIDSTAT_INTERVAL > $SCREEN_LOGDIR/$PIDSTAT_FILE"
-    else
-        screen_it pidstat "pidstat $PIDSTAT_OPTS $PIDSTAT_INTERVAL"
-    fi
-fi
-
 
 # Start Services
 # ==============
@@ -915,6 +910,9 @@ if is_service_enabled key; then
     # Do the keystone-specific bits from keystone_data.sh
     export OS_SERVICE_TOKEN=$SERVICE_TOKEN
     export OS_SERVICE_ENDPOINT=$SERVICE_ENDPOINT
+    # Add temporarily to make openstackclient work
+    export OS_TOKEN=$SERVICE_TOKEN
+    export OS_URL=$SERVICE_ENDPOINT
     create_keystone_accounts
     create_nova_accounts
     create_cinder_accounts
@@ -928,6 +926,10 @@ if is_service_enabled key; then
         create_swift_accounts
     fi
 
+    if is_service_enabled heat; then
+        create_heat_accounts
+    fi
+
     # ``keystone_data.sh`` creates services, admin and demo users, and roles.
     ADMIN_PASSWORD=$ADMIN_PASSWORD SERVICE_TENANT_NAME=$SERVICE_TENANT_NAME SERVICE_PASSWORD=$SERVICE_PASSWORD \
     SERVICE_TOKEN=$SERVICE_TOKEN SERVICE_ENDPOINT=$SERVICE_ENDPOINT SERVICE_HOST=$SERVICE_HOST \
@@ -937,6 +939,7 @@ if is_service_enabled key; then
         bash -x $FILES/keystone_data.sh
 
     # Set up auth creds now that keystone is bootstrapped
+    unset OS_TOKEN OS_URL
     export OS_AUTH_URL=$SERVICE_ENDPOINT
     export OS_TENANT_NAME=admin
     export OS_USERNAME=admin
@@ -963,15 +966,6 @@ fi
 if is_service_enabled g-reg; then
     echo_summary "Configuring Glance"
     init_glance
-fi
-
-
-# Ironic
-# ------
-
-if is_service_enabled ir-api ir-cond; then
-    echo_summary "Configuring Ironic"
-    init_ironic
 fi
 
 
@@ -1059,9 +1053,6 @@ if is_service_enabled nova && is_baremetal; then
     echo_summary "Preparing for nova baremetal"
     prepare_baremetal_toolchain
     configure_baremetal_nova_dirs
-    if [[ "$BM_USE_FAKE_ENV" = "True" ]]; then
-        create_fake_baremetal_env
-    fi
 fi
 
 
@@ -1096,15 +1087,50 @@ if is_service_enabled s-proxy; then
 fi
 
 # Launch the Glance services
-if is_service_enabled g-api g-reg; then
+if is_service_enabled glance; then
     echo_summary "Starting Glance"
     start_glance
 fi
 
-# Launch the Ironic services
-if is_service_enabled ir-api ir-cond; then
-    echo_summary "Starting Ironic"
-    start_ironic
+# Install Images
+# ==============
+
+# Upload an image to glance.
+#
+# The default image is cirros, a small testing image which lets you login as **root**
+# cirros has a ``cloud-init`` analog supporting login via keypair and sending
+# scripts as userdata.
+# See https://help.ubuntu.com/community/CloudInit for more on cloud-init
+#
+# Override ``IMAGE_URLS`` with a comma-separated list of UEC images.
+#  * **precise**: http://uec-images.ubuntu.com/precise/current/precise-server-cloudimg-amd64.tar.gz
+
+if is_service_enabled g-reg; then
+    TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
+    die_if_not_set $LINENO TOKEN "Keystone fail to get token"
+
+    if is_baremetal; then
+        echo_summary "Creating and uploading baremetal images"
+
+        # build and upload separate deploy kernel & ramdisk
+        upload_baremetal_deploy $TOKEN
+
+        # upload images, separating out the kernel & ramdisk for PXE boot
+        for image_url in ${IMAGE_URLS//,/ }; do
+            upload_baremetal_image $image_url $TOKEN
+        done
+    else
+        echo_summary "Uploading images"
+
+        # Option to upload legacy ami-tty, which works with xenserver
+        if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
+            IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
+        fi
+
+        for image_url in ${IMAGE_URLS//,/ }; do
+            upload_image $image_url $TOKEN
+        done
+    fi
 fi
 
 # Create an access key and secret key for nova ec2 register image
@@ -1124,8 +1150,8 @@ fi
 # Create a randomized default value for the keymgr's fixed_key
 if is_service_enabled nova; then
     FIXED_KEY=""
-    for i in $(seq 1 64);
-        do FIXED_KEY+=$(echo "obase=16; $(($RANDOM % 16))" | bc);
+    for i in $(seq 1 64); do
+        FIXED_KEY+=$(echo "obase=16; $(($RANDOM % 16))" | bc);
     done;
     iniset $NOVA_CONF keymgr fixed_key "$FIXED_KEY"
 fi
@@ -1186,7 +1212,7 @@ fi
 
 # Configure and launch heat engine, api and metadata
 if is_service_enabled heat; then
-    # Initialize heat, including replacing nova flavors
+    # Initialize heat
     echo_summary "Configuring Heat"
     init_heat
     echo_summary "Starting Heat"
@@ -1211,47 +1237,6 @@ if is_service_enabled nova && is_service_enabled key; then
     $TOP_DIR/tools/create_userrc.sh $USERRC_PARAMS
 fi
 
-
-# Install Images
-# ==============
-
-# Upload an image to glance.
-#
-# The default image is cirros, a small testing image which lets you login as **root**
-# cirros has a ``cloud-init`` analog supporting login via keypair and sending
-# scripts as userdata.
-# See https://help.ubuntu.com/community/CloudInit for more on cloud-init
-#
-# Override ``IMAGE_URLS`` with a comma-separated list of UEC images.
-#  * **precise**: http://uec-images.ubuntu.com/precise/current/precise-server-cloudimg-amd64.tar.gz
-
-if is_service_enabled g-reg; then
-    TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
-    die_if_not_set $LINENO TOKEN "Keystone fail to get token"
-
-    if is_baremetal; then
-        echo_summary "Creating and uploading baremetal images"
-
-        # build and upload separate deploy kernel & ramdisk
-        upload_baremetal_deploy $TOKEN
-
-        # upload images, separating out the kernel & ramdisk for PXE boot
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_baremetal_image $image_url $TOKEN
-        done
-    else
-        echo_summary "Uploading images"
-
-        # Option to upload legacy ami-tty, which works with xenserver
-        if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
-            IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
-        fi
-
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_image $image_url $TOKEN
-        done
-    fi
-fi
 
 # If we are running nova with baremetal driver, there are a few
 # last-mile configuration bits to attend to, which must happen
@@ -1353,11 +1338,6 @@ echo ""
 # to access the site using your browser.
 if is_service_enabled horizon; then
     echo "Horizon is now available at http://$SERVICE_HOST/"
-fi
-
-# Warn that the default flavors have been changed by Heat
-if is_service_enabled heat; then
-    echo "Heat has replaced the default flavors. View by running: nova flavor-list"
 fi
 
 # If Keystone is present you can point ``nova`` cli to this server

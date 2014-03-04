@@ -111,12 +111,22 @@ OBJECT_PORT_BASE=${OBJECT_PORT_BASE:-6013}
 CONTAINER_PORT_BASE=${CONTAINER_PORT_BASE:-6011}
 ACCOUNT_PORT_BASE=${ACCOUNT_PORT_BASE:-6012}
 
+# Tell Tempest this project is present
+TEMPEST_SERVICES+=,swift
+
 
 # Functions
 # ---------
 
+# Test if any Swift services are enabled
+# is_swift_enabled
+function is_swift_enabled {
+    [[ ,${ENABLED_SERVICES} =~ ,"s-" ]] && return 0
+    return 1
+}
+
 # cleanup_swift() - Remove residual data files
-function cleanup_swift() {
+function cleanup_swift {
     rm -f ${SWIFT_CONF_DIR}{*.builder,*.ring.gz,backups/*.builder,backups/*.ring.gz}
     if egrep -q ${SWIFT_DATA_DIR}/drives/sdb1 /proc/mounts; then
         sudo umount ${SWIFT_DATA_DIR}/drives/sdb1
@@ -131,7 +141,7 @@ function cleanup_swift() {
 }
 
 # _cleanup_swift_apache_wsgi() - Remove wsgi files, disable and remove apache vhost file
-function _cleanup_swift_apache_wsgi() {
+function _cleanup_swift_apache_wsgi {
     sudo rm -f $SWIFT_APACHE_WSGI_DIR/*.wsgi
     disable_apache_site proxy-server
     for node_number in ${SWIFT_REPLICAS_SEQ}; do
@@ -144,7 +154,7 @@ function _cleanup_swift_apache_wsgi() {
 }
 
 # _config_swift_apache_wsgi() - Set WSGI config files of Swift
-function _config_swift_apache_wsgi() {
+function _config_swift_apache_wsgi {
     sudo mkdir -p ${SWIFT_APACHE_WSGI_DIR}
     local apache_vhost_dir=/etc/${APACHE_NAME}/$APACHE_CONF_DIR
     local proxy_port=${SWIFT_DEFAULT_BIND_PORT:-8080}
@@ -221,8 +231,48 @@ function _config_swift_apache_wsgi() {
     done
 }
 
+# This function generates an object/container/account configuration
+# emulating 4 nodes on different ports
+function generate_swift_config {
+    local swift_node_config=$1
+    local node_id=$2
+    local bind_port=$3
+    local server_type=$4
+
+    log_facility=$[ node_id - 1 ]
+    node_path=${SWIFT_DATA_DIR}/${node_number}
+
+    iniuncomment ${swift_node_config} DEFAULT user
+    iniset ${swift_node_config} DEFAULT user ${STACK_USER}
+
+    iniuncomment ${swift_node_config} DEFAULT bind_port
+    iniset ${swift_node_config} DEFAULT bind_port ${bind_port}
+
+    iniuncomment ${swift_node_config} DEFAULT swift_dir
+    iniset ${swift_node_config} DEFAULT swift_dir ${SWIFT_CONF_DIR}
+
+    iniuncomment ${swift_node_config} DEFAULT devices
+    iniset ${swift_node_config} DEFAULT devices ${node_path}
+
+    iniuncomment ${swift_node_config} DEFAULT log_facility
+    iniset ${swift_node_config} DEFAULT log_facility LOG_LOCAL${log_facility}
+
+    iniuncomment ${swift_node_config} DEFAULT workers
+    iniset ${swift_node_config} DEFAULT workers 1
+
+    iniuncomment ${swift_node_config} DEFAULT disable_fallocate
+    iniset ${swift_node_config} DEFAULT disable_fallocate true
+
+    iniuncomment ${swift_node_config} DEFAULT mount_check
+    iniset ${swift_node_config} DEFAULT mount_check false
+
+    iniuncomment ${swift_node_config} ${server_type}-replicator vm_test_mode
+    iniset ${swift_node_config} ${server_type}-replicator vm_test_mode yes
+}
+
+
 # configure_swift() - Set config files, create data dirs and loop image
-function configure_swift() {
+function configure_swift {
     local swift_pipeline="${SWIFT_EXTRAS_MIDDLEWARE_NO_AUTH}"
     local node_number
     local swift_node_config
@@ -251,12 +301,14 @@ function configure_swift() {
     # rsyncd.conf just prepared for 4 nodes
     if is_ubuntu; then
         sudo sed -i '/^RSYNC_ENABLE=false/ { s/false/true/ }' /etc/default/rsync
-    else
+    elif [ -e /etc/xinetd.d/rsync ]; then
         sudo sed -i '/disable *= *yes/ { s/yes/no/ }' /etc/xinetd.d/rsync
     fi
 
     SWIFT_CONFIG_PROXY_SERVER=${SWIFT_CONF_DIR}/proxy-server.conf
     cp ${SWIFT_DIR}/etc/proxy-server.conf-sample ${SWIFT_CONFIG_PROXY_SERVER}
+
+    cp ${SWIFT_DIR}/etc/container-sync-realms.conf-sample ${SWIFT_CONF_DIR}/container-sync-realms.conf
 
     iniuncomment ${SWIFT_CONFIG_PROXY_SERVER} DEFAULT user
     iniset ${SWIFT_CONFIG_PROXY_SERVER} DEFAULT user ${STACK_USER}
@@ -336,7 +388,7 @@ function configure_swift() {
 # NOTE(chmou): s3token middleware is not updated yet to use only
 # username and password.
 [filter:s3token]
-paste.filter_factory = keystone.middleware.s3_token:filter_factory
+paste.filter_factory = keystoneclient.middleware.s3_token:filter_factory
 auth_port = ${KEYSTONE_AUTH_PORT}
 auth_host = ${KEYSTONE_AUTH_HOST}
 auth_protocol = ${KEYSTONE_AUTH_PROTOCOL}
@@ -351,45 +403,6 @@ EOF
 
     cp ${SWIFT_DIR}/etc/swift.conf-sample ${SWIFT_CONF_DIR}/swift.conf
     iniset ${SWIFT_CONF_DIR}/swift.conf swift-hash swift_hash_path_suffix ${SWIFT_HASH}
-
-    # This function generates an object/container/account configuration
-    # emulating 4 nodes on different ports
-    function generate_swift_config() {
-        local swift_node_config=$1
-        local node_id=$2
-        local bind_port=$3
-        local server_type=$4
-
-        log_facility=$[ node_id - 1 ]
-        node_path=${SWIFT_DATA_DIR}/${node_number}
-
-        iniuncomment ${swift_node_config} DEFAULT user
-        iniset ${swift_node_config} DEFAULT user ${STACK_USER}
-
-        iniuncomment ${swift_node_config} DEFAULT bind_port
-        iniset ${swift_node_config} DEFAULT bind_port ${bind_port}
-
-        iniuncomment ${swift_node_config} DEFAULT swift_dir
-        iniset ${swift_node_config} DEFAULT swift_dir ${SWIFT_CONF_DIR}
-
-        iniuncomment ${swift_node_config} DEFAULT devices
-        iniset ${swift_node_config} DEFAULT devices ${node_path}
-
-        iniuncomment ${swift_node_config} DEFAULT log_facility
-        iniset ${swift_node_config} DEFAULT log_facility LOG_LOCAL${log_facility}
-
-        iniuncomment ${swift_node_config} DEFAULT workers
-        iniset ${swift_node_config} DEFAULT workers 1
-
-        iniuncomment ${swift_node_config} DEFAULT disable_fallocate
-        iniset ${swift_node_config} DEFAULT disable_fallocate true
-
-        iniuncomment ${swift_node_config} DEFAULT mount_check
-        iniset ${swift_node_config} DEFAULT mount_check false
-
-        iniuncomment ${swift_node_config} ${server_type}-replicator vm_test_mode
-        iniset ${swift_node_config} ${server_type}-replicator vm_test_mode yes
-    }
 
     for node_number in ${SWIFT_REPLICAS_SEQ}; do
         swift_node_config=${SWIFT_CONF_DIR}/object-server/${node_number}.conf
@@ -447,7 +460,7 @@ EOF
 }
 
 # create_swift_disk - Create Swift backing disk
-function create_swift_disk() {
+function create_swift_disk {
     local node_number
 
     # First do a bit of setup by creating the directories and
@@ -507,46 +520,65 @@ function create_swift_disk() {
 # swifttenanttest1   swiftusertest3     anotherrole
 # swifttenanttest2   swiftusertest2     admin
 
-function create_swift_accounts() {
+function create_swift_accounts {
+    # Defines specific passwords used by tools/create_userrc.sh
+    SWIFTUSERTEST1_PASSWORD=testing
+    SWIFTUSERTEST2_PASSWORD=testing2
+    SWIFTUSERTEST3_PASSWORD=testing3
+
     KEYSTONE_CATALOG_BACKEND=${KEYSTONE_CATALOG_BACKEND:-sql}
 
-    SERVICE_TENANT=$(keystone tenant-list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
-    ADMIN_ROLE=$(keystone role-list | awk "/ admin / { print \$2 }")
+    SERVICE_TENANT=$(openstack project list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
+    ADMIN_ROLE=$(openstack role list | awk "/ admin / { print \$2 }")
 
-    SWIFT_USER=$(keystone user-create --name=swift --pass="$SERVICE_PASSWORD" \
-        --tenant-id $SERVICE_TENANT --email=swift@example.com | grep " id " | get_field 2)
-    keystone user-role-add --tenant-id $SERVICE_TENANT --user-id $SWIFT_USER --role-id $ADMIN_ROLE
+    SWIFT_USER=$(openstack user create \
+        swift \
+        --password "$SERVICE_PASSWORD" \
+        --project $SERVICE_TENANT \
+        --email=swift@example.com \
+        | grep " id " | get_field 2)
+    openstack role add \
+        $ADMIN_ROLE \
+        --project $SERVICE_TENANT \
+        --user $SWIFT_USER
 
     if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
-        SWIFT_SERVICE=$(keystone service-create --name=swift --type="object-store" \
-            --description="Swift Service" | grep " id " | get_field 2)
-        keystone endpoint-create \
+        SWIFT_SERVICE=$(openstack service create \
+            swift \
+            --type="object-store" \
+            --description="Swift Service" \
+            | grep " id " | get_field 2)
+        openstack endpoint create \
+            $SWIFT_SERVICE \
             --region RegionOne \
-            --service_id $SWIFT_SERVICE \
             --publicurl "http://$SERVICE_HOST:8080/v1/AUTH_\$(tenant_id)s" \
             --adminurl "http://$SERVICE_HOST:8080" \
             --internalurl "http://$SERVICE_HOST:8080/v1/AUTH_\$(tenant_id)s"
     fi
 
-    SWIFT_TENANT_TEST1=$(keystone tenant-create --name=swifttenanttest1 | grep " id " | get_field 2)
+    SWIFT_TENANT_TEST1=$(openstack project create swifttenanttest1 | grep " id " | get_field 2)
     die_if_not_set $LINENO SWIFT_TENANT_TEST1 "Failure creating SWIFT_TENANT_TEST1"
-    SWIFT_USER_TEST1=$(keystone user-create --name=swiftusertest1 --pass=testing --email=test@example.com | grep " id " | get_field 2)
+    SWIFT_USER_TEST1=$(openstack user create swiftusertest1 --password=$SWIFTUSERTEST1_PASSWORD \
+        --project "$SWIFT_TENANT_TEST1" --email=test@example.com | grep " id " | get_field 2)
     die_if_not_set $LINENO SWIFT_USER_TEST1 "Failure creating SWIFT_USER_TEST1"
-    keystone user-role-add --user-id $SWIFT_USER_TEST1 --role-id $ADMIN_ROLE --tenant-id $SWIFT_TENANT_TEST1
+    openstack role add --user $SWIFT_USER_TEST1 --project $SWIFT_TENANT_TEST1 $ADMIN_ROLE
 
-    SWIFT_USER_TEST3=$(keystone user-create --name=swiftusertest3 --pass=testing3 --email=test3@example.com | grep " id " | get_field 2)
+    SWIFT_USER_TEST3=$(openstack user create swiftusertest3 --password=$SWIFTUSERTEST3_PASSWORD \
+        --project "$SWIFT_TENANT_TEST1" --email=test3@example.com | grep " id " | get_field 2)
     die_if_not_set $LINENO SWIFT_USER_TEST3 "Failure creating SWIFT_USER_TEST3"
-    keystone user-role-add --user-id $SWIFT_USER_TEST3 --role-id $ANOTHER_ROLE --tenant-id $SWIFT_TENANT_TEST1
+    openstack role add --user $SWIFT_USER_TEST3 --project $SWIFT_TENANT_TEST1 $ANOTHER_ROLE
 
-    SWIFT_TENANT_TEST2=$(keystone tenant-create --name=swifttenanttest2 | grep " id " | get_field 2)
+    SWIFT_TENANT_TEST2=$(openstack project create swifttenanttest2 | grep " id " | get_field 2)
     die_if_not_set $LINENO SWIFT_TENANT_TEST2 "Failure creating SWIFT_TENANT_TEST2"
-    SWIFT_USER_TEST2=$(keystone user-create --name=swiftusertest2 --pass=testing2 --email=test2@example.com | grep " id " | get_field 2)
+
+    SWIFT_USER_TEST2=$(openstack user create swiftusertest2 --password=$SWIFTUSERTEST2_PASSWORD \
+        --project "$SWIFT_TENANT_TEST2" --email=test2@example.com | grep " id " | get_field 2)
     die_if_not_set $LINENO SWIFT_USER_TEST2 "Failure creating SWIFT_USER_TEST2"
-    keystone user-role-add --user-id $SWIFT_USER_TEST2 --role-id $ADMIN_ROLE --tenant-id $SWIFT_TENANT_TEST2
+    openstack role add --user $SWIFT_USER_TEST2 --project $SWIFT_TENANT_TEST2 $ADMIN_ROLE
 }
 
 # init_swift() - Initialize rings
-function init_swift() {
+function init_swift {
     local node_number
     # Make sure to kill all swift processes first
     swift-init --run-dir=${SWIFT_DATA_DIR}/run all stop || true
@@ -580,7 +612,7 @@ function init_swift() {
     rm -f $SWIFT_AUTH_CACHE_DIR/*
 }
 
-function install_swift() {
+function install_swift {
     git_clone $SWIFT_REPO $SWIFT_DIR $SWIFT_BRANCH
     setup_develop $SWIFT_DIR
     if is_apache_enabled_service swift; then
@@ -588,13 +620,13 @@ function install_swift() {
     fi
 }
 
-function install_swiftclient() {
+function install_swiftclient {
     git_clone $SWIFTCLIENT_REPO $SWIFTCLIENT_DIR $SWIFTCLIENT_BRANCH
     setup_develop $SWIFTCLIENT_DIR
 }
 
 # start_swift() - Start running processes, including screen
-function start_swift() {
+function start_swift {
     # (re)start rsyslog
     restart_service rsyslog
     # (re)start memcached to make sure we have a clean memcache.
@@ -603,8 +635,10 @@ function start_swift() {
     # Start rsync
     if is_ubuntu; then
         sudo /etc/init.d/rsync restart || :
+    elif [ -e /etc/xinetd.d/rsync ]; then
+        start_service xinetd
     else
-        sudo systemctl start xinetd.service
+        start_service rsyncd
     fi
 
     if is_apache_enabled_service swift; then
@@ -642,7 +676,7 @@ function start_swift() {
 }
 
 # stop_swift() - Stop running processes (non-screen)
-function stop_swift() {
+function stop_swift {
 
     if is_apache_enabled_service swift; then
         swift-init --run-dir=${SWIFT_DATA_DIR}/run rest stop && return 0
@@ -652,10 +686,8 @@ function stop_swift() {
     if type -p swift-init >/dev/null; then
         swift-init --run-dir=${SWIFT_DATA_DIR}/run all stop || true
     fi
-    for type in proxy object container account; do
-        # Dump all of the servers
-        pkill -f swift-
-    done
+    # Dump all of the servers
+    pkill -f swift-
 }
 
 # Restore xtrace
