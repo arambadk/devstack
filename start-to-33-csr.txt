@@ -1,5 +1,9 @@
 source openrc admin demo
 
+# Setup static route to CSR for VPN link
+CSR_PORT=`neutron port-list | grep private_p | cut -d' ' -f 11 | cut -f 2 -d'"'`
+neutron router-update router1 --routes type=dict list=true destination=10.2.0.0/24,nexthop=$CSR_PORT
+
 neutron vpn-ikepolicy-create ikepolicy1
 neutron vpn-ipsecpolicy-create ipsecpolicy1
 neutron vpn-service-create --name myvpn --description "My vpn service" router1 mysubnet
