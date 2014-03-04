@@ -19,7 +19,7 @@ function neutron_vpn_configure_common() {
 }
 
 function neutron_vpnaas_configure_driver() {
-    iniset_multiline $NEUTRON_CONF service_providers service_provider "VPN:openswan:neutron.services.vpn.service_drivers.ipsec.IPsecVPNDriver:default" "VPN:cisco:neutron.services.vpn.service_drivers.cisco_ipsec.CiscoCsrIPsecVPNDriver"
+    iniset_multiline $NEUTRON_CONF service_providers service_provider "VPN:openswan:neutron.services.vpn.service_drivers.ipsec.IPsecVPNDriver" "VPN:cisco:neutron.services.vpn.service_drivers.cisco_ipsec.CiscoCsrIPsecVPNDriver:driver"
 }
 
 function neutron_vpn_stop() {
