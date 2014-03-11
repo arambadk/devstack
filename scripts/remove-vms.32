@@ -1,0 +1,3 @@
+source ~/devstack/openrc admin demo
+nova delete peter
+nova delete paul
