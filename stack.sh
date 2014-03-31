@@ -1224,12 +1224,8 @@ if is_service_enabled nova && is_service_enabled key; then
         USERRC_PARAMS="$USERRC_PARAMS --os-cacert $SSL_BUNDLE_FILE"
     fi
 
-    for image_url in ${IMAGE_URLS//,/ }; do
-        # Downloads the image (uec ami+aki style), then extracts it.
-        IMAGE_FNAME=`basename "$image_url"`
-        if [ ! -f $FILES/$IMAGE_FNAME ]; then
-            wget -c $image_url -O $FILES/$IMAGE_FNAME
-        fi
+    $TOP_DIR/tools/create_userrc.sh $USERRC_PARAMS
+fi
 
 
 # If we are running nova with baremetal driver, there are a few
