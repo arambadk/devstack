@@ -1,9 +1,9 @@
-source openrc admin admin
+source ~/devstack/openrc admin admin
 
 # Allow admin tenant access to private net (needed?)
 neutron net-update --shared=True private
 
-source openrc admin demo
+source ~/devstack/openrc admin demo
 
 nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
 nova secgroup-add-rule default tcp 22 22 0.0.0.0/0

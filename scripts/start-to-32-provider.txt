@@ -1,4 +1,4 @@
-source ../openrc admin demo
+source ~/devstack/openrc admin demo
 
 # Setup static route to CSR for VPN link
 CSR_PORT=`neutron port-list | grep private_p | cut -d' ' -f 11 | cut -f 2 -d'"'`

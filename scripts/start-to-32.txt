@@ -1,4 +1,4 @@
-source ../openrc admin demo
+source ~/devstack/openrc admin demo
 
 neutron vpn-ikepolicy-create ikepolicy1
 neutron vpn-ipsecpolicy-create ipsecpolicy1
