@@ -234,6 +234,10 @@ source $TOP_DIR/lib/neutron_plugins/services/firewall
 # ---------------------------------
 source $TOP_DIR/lib/neutron_plugins/services/cisco_router
 
+# Cisco Device Manager Service Plugin functions
+# ---------------------------------
+source $TOP_DIR/lib/neutron_plugins/services/cisco_device_manager
+
 # Use security group or not
 if has_neutron_plugin_security_group; then
     Q_USE_SECGROUP=${Q_USE_SECGROUP:-True}
@@ -264,6 +268,9 @@ function configure_neutron() {
     # goes before q-svc to init Q_SERVICE_PLUGIN_CLASSES
     if is_service_enabled q-ciscorouter; then
         _configure_neutron_cisco_router
+    fi
+    if is_service_enabled q-ciscodevicemanager; then
+         _configure_neutron_cisco_device_manager
     fi
     if is_service_enabled q-lbaas; then
         _configure_neutron_lbaas
@@ -549,6 +556,9 @@ function stop_neutron() {
     if is_service_enabled q-ciscorouter; then
          neutron_cisco_router_stop
     fi
+    if is_service_enabled q-ciscodevicemanager; then
+         neutron_cisco_device_manager_stop
+    fi
 }
 
 # cleanup_neutron() - Remove residual data files, anything left over from previous
@@ -732,6 +742,10 @@ function _configure_neutron_vpn()
 
 function _configure_neutron_cisco_router() {
     neutron_cisco_router_configure_common
+}
+
+function _configure_neutron_cisco_device_manager() {
+    neutron_cisco_device_manager_configure_common
 }
 
 # _configure_neutron_plugin_agent() - Set config files for neutron plugin agent

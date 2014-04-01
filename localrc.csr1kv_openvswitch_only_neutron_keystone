@@ -1,14 +1,15 @@
 # -*- mode: shell-script -*-
 
 # Setting OFFLINE to True switches off download of packages.
-OFFLINE=False
+OFFLINE=True
 
 # Setting RECLONE=yes will make stach.sh freshen each repo on each run.
-RECLONE=yes
+RECLONE=no
 
 GIT_BASE=${GIT_BASE:-https://github.com}
 NEUTRON_REPO=${GIT_BASE}/CiscoSystems/neutron.git
-NEUTRON_BRANCH=csr1kv_for_routing_icehouse
+#NEUTRON_BRANCH=csr1kv_for_routing_icehouse
+NEUTRON_BRANCH=bobmel/csr1kv_for_routing_icehouse
 
 # Destination path for installation of the OpenStack components.
 # There is no need to specify it unless you want the code in
@@ -46,6 +47,7 @@ enable_service q-dhcp
 #enable_service q-l3
 enable_service ciscocfgagent
 enable_service q-ciscorouter
+enable_service q-ciscodevicemanager
 
 #LIBVIRT_FIREWALL_DRIVER=nova.virt.firewall.NoopFirewallDriver
 Q_PLUGIN=csr1kv_openvswitch
