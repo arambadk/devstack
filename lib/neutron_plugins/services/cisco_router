@@ -13,7 +13,7 @@ function neutron_cisco_router_configure_common() {
     CISCO_ROUTER_PLUGIN_CONFIG_DIR=$NEUTRON_CONF_DIR/plugins/cisco
     mkdir -p $CISCO_ROUTER_PLUGIN_CONFIG_DIR
     Q_CISCO_ROUTER_PLUGIN_CONF_FILE=$CISCO_ROUTER_PLUGIN_CONFIG_DIR/cisco_router_plugin.ini
-    cp $NEUTRON_DIR/neutron/plugins/cisco/l3/etc/cisco_router_plugin.ini $Q_CISCO_ROUTER_PLUGIN_CONF_FILE
+    cp $NEUTRON_DIR/etc/plugins/cisco/cisco_router_plugin.ini $Q_CISCO_ROUTER_PLUGIN_CONF_FILE
     Q_PLUGIN_EXTRA_CONF_FILES=(${Q_PLUGIN_EXTRA_CONF_FILES[@]} $Q_CISCO_ROUTER_PLUGIN_CONF_FILE)
  }
 

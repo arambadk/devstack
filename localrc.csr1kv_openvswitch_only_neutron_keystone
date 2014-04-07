@@ -1,10 +1,10 @@
 # -*- mode: shell-script -*-
 
 # Setting OFFLINE to True switches off download of packages.
-OFFLINE=True
+OFFLINE=False
 
 # Setting RECLONE=yes will make stach.sh freshen each repo on each run.
-RECLONE=no
+RECLONE=yes
 
 GIT_BASE=${GIT_BASE:-https://github.com}
 NEUTRON_REPO=${GIT_BASE}/CiscoSystems/neutron.git
@@ -42,8 +42,8 @@ disable_service tempest
 
 enable_service neutron
 enable_service q-svc
-enable_service q-agt
-enable_service q-dhcp
+#enable_service q-agt
+#enable_service q-dhcp
 #enable_service q-l3
 enable_service ciscocfgagent
 enable_service q-ciscorouter
