@@ -6,10 +6,10 @@ MY_XTRACE=$(set +o | grep xtrace)
 set +o xtrace
 
 # Name of cisco router plugin
-Q_CISCO_ROUTER_PLUGIN=${Q_CISCO_ROUTER_PLUGIN:-""}
+Q_CISCO_ROUTER_PLUGIN=${Q_CISCO_ROUTER_PLUGIN:-}
 
 # Name of cisco device manager plugin
-Q_CISCO_DEVICE_MANAGER_PLUGIN=${Q_CISCO_DEVICE_MANAGER_PLUGIN:-""}
+Q_CISCO_DEVICE_MANAGER_PLUGIN=${Q_CISCO_DEVICE_MANAGER_PLUGIN:-}
 
 # Indicate if a VSM instance should be created
 Q_CISCO_PLUGIN_DEVSTACK_VSM=${Q_CISCO_PLUGIN_DEVSTACK_VSM:-True}
