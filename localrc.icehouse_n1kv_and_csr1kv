@@ -28,7 +28,8 @@ FLAT_INTERFACE=eth0
 NETWORK_GATEWAY=10.11.12.1
 
 our_pw=<SET THIS VARIABLE!!!>
-MYSQL_PASSWORD=$our_pw
+# Must use hard coded value, as scripts grep for the following variables.
+MYSQL_PASSWORD=<SET THIS VARIABLE!!!>
 RABBIT_PASSWORD=$our_pw
 SERVICE_TOKEN=$our_pw
 SERVICE_PASSWORD=$our_pw

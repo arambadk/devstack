@@ -17,8 +17,11 @@ localrc=$PWD/localrc
 eval $(grep ^DEST= ./localrc)
 eval $(grep ^DEST= ./stackrc)
 eval $(grep NEUTRON_DIR= ./lib/neutron)
+eval $(grep MYSQL_USER= ./localrc)
+eval $(grep MYSQL_PASSWORD= ./localrc)
 
 script_dir=$(dirname $(find $NEUTRON_DIR -name csr1kv_install_all.sh))
 cd $script_dir
-./csr1kv_install_all.sh neutron $plugin $localrc
+echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
+./csr1kv_install_all.sh neutron $plugin $localrc $MYSQL_USER $MYSQL_PASSWORD
 

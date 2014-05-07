@@ -98,7 +98,8 @@ FLOATING_RANGE=172.16.6.32/27
 LOGFILE=~/devstack/stack.sh.log
 
 our_pw=simple
-MYSQL_PASSWORD=$our_pw
+# Must use hard coded value, as scripts grep for the following variables.
+MYSQL_PASSWORD=simple
 MYSQL_USER=stacker
 RABBIT_PASSWORD=$our_pw
 SERVICE_TOKEN=$our_pw
