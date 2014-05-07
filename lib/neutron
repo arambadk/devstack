@@ -414,7 +414,7 @@ function create_neutron_initial_network {
             if _has_n1kv_subplugin; then
 	        N1KV_VLAN_NET_SEGMENT_RANGE=${N1KV_VLAN_NET_SEGMENT_RANGE:-"100-499"} 
 	        N1KV_VLAN_NET_PROFILE_NAME=${N1KV_VLAN_NET_PROFILE_NAME:-vlan_test_profile}
-	        PROFILE_ID=$(neutron cisco-network-profile-create --segment_range $N1KV_VLAN_NET_SEGMENT_RANGE $N1KV_VLAN_NET_PROFILE_NAME vlan | grep ' id ' | get_field 2)
+	        PROFILE_ID=$(neutron cisco-network-profile-create --segment_range $N1KV_VLAN_NET_SEGMENT_RANGE --physical_network p1 $N1KV_VLAN_NET_PROFILE_NAME vlan | grep ' id ' | get_field 2)
                 PROFILE_ARG="--n1kv:profile-id=$PROFILE_ID"
             fi
         fi
