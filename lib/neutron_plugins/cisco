@@ -673,6 +673,9 @@ function _create_devstack_vsm {
     # Intall krdc package. krdc is used to connect to the VSM desktop/console
     install_package krdc
 
+    # Ignore all errors for this function (as latest DevStack will abort on any error)
+    set +o errexit
+
     if [[ -z "$Q_CISCO_PLUGIN_VSM_ISO_IMAGE" ]]; then
         die $LINENO "Please specify your VSM iso image in the localrc file!"
     fi
@@ -903,6 +906,8 @@ function _create_devstack_vsm {
     if [[ "$config_vsm" == "True" ]]; then
         _configure_vsm $Q_CISCO_PLUGIN_VSM_IP $Q_CISCO_PLUGIN_VSM_USERNAME $Q_CISCO_PLUGIN_VSM_PASSWORD
     fi
+    # Turn exit on error, back on
+    set -o errexit
 }
 
 function write_n1kv_conf {
