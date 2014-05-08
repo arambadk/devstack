@@ -1195,6 +1195,7 @@ fi
 
 if is_service_enabled neutron; then
     start_neutron_agents
+    setup_for_csr1kv
 fi
 # Once neutron agents are started setup initial network elements
 if is_service_enabled q-svc; then
