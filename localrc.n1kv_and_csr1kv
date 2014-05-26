@@ -1,8 +1,8 @@
-+------------------------------------------------------------------------------------------------+
-|                                                                                                |
-|  PLEASE NOTE: You MUST set those variables below that are marked with <SET THIS VARIABLE!!!>.  |
-|                                                                                                |
-+------------------------------------------------------------------------------------------------+
+# +------------------------------------------------------------------------------------------------+
+# |                                                                                                |
+# |  PLEASE NOTE: You MUST set those variables below that are marked with <SET THIS VARIABLE!!!>.  |
+# |                                                                                                |
+# +------------------------------------------------------------------------------------------------+
 
 OFFLINE=False
 RECLONE=yes
@@ -26,6 +26,13 @@ FIXED_RANGE=10.11.12.0/24
 FIXED_NETWORK_SIZE=256
 FLAT_INTERFACE=eth0
 NETWORK_GATEWAY=10.11.12.1
+#FLOATING_RANGE=172.16.6.32/27
+#PUBLIC_NETWORK_GATEWAY=172.16.6.33 
+FLOATING_RANGE=<SET THIS VARIABLE!!!>
+PUBLIC_NETWORK_GATEWAY=<SET THIS VARIABLE!!!>
+
+# Use br-int as bridge to reach external networks
+PUBLIC_BRIDGE=br-int
 
 our_pw=<SET THIS VARIABLE!!!>
 # Must use hard coded value, as scripts grep for the following variables.
@@ -39,7 +46,7 @@ disable_service n-net
 enable_service neutron
 enable_service q-svc
 disable_service q-agt
-#enable_service q-l3
+enable_service q-l3
 enable_service q-dhcp
 enable_service ciscocfgagent
 enable_service q-ciscorouter

@@ -32,7 +32,7 @@ enable_service neutron
 enable_service q-svc
 enable_service q-agt
 enable_service q-dhcp
-#enable_service q-l3
+enable_service q-l3
 enable_service ciscocfgagent
 enable_service q-ciscorouter
 enable_service q-ciscodevicemanager
@@ -63,6 +63,10 @@ FIXED_RANGE=10.0.3.0/24
 NETWORK_GATEWAY=10.0.3.1
 FIXED_NETWORK_SIZE=256
 FLOATING_RANGE=172.16.6.32/27
+PUBLIC_NETWORK_GATEWAY=172.16.6.33
+
+# Use br-int as bridge to reach external networks
+PUBLIC_BRIDGE=br-int
 
 # Logging
 # -------
