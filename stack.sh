@@ -410,7 +410,7 @@ function read_password {
             echo "Invalid chars in password.  Try again:"
         done
         if [ ! $pw ]; then
-            pw=`openssl rand -hex 10`
+            pw=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 20)
         fi
         eval "$var=$pw"
         echo "$var=$pw" >> $localrc
@@ -494,14 +494,18 @@ function spinner {
     done
 }
 
+function kill_spinner {
+    if [ ! -z "$LAST_SPINNER_PID" ]; then
+        kill >/dev/null 2>&1 $LAST_SPINNER_PID
+        printf "\b\b\bdone\n" >&3
+    fi
+}
+
 # Echo text to the log file, summary log file and stdout
 # echo_summary "something to say"
 function echo_summary {
     if [[ -t 3 && "$VERBOSE" != "True" ]]; then
-        kill >/dev/null 2>&1 $LAST_SPINNER_PID
-        if [ ! -z "$LAST_SPINNER_PID" ]; then
-            printf "\b\b\bdone\n" >&3
-        fi
+        kill_spinner
         echo -n -e $@ >&6
         spinner &
         LAST_SPINNER_PID=$!
@@ -540,10 +544,11 @@ if [[ -n "$LOGFILE" ]]; then
 
     # Redirect output according to config
 
-    # Copy stdout to fd 3
+    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
+    # stdout later.
     exec 3>&1
     if [[ "$VERBOSE" == "True" ]]; then
-        # Redirect stdout/stderr to tee to write the log file
+        # Set fd 1 and 2 to write the log file
         exec 1> >( awk -v logfile=${LOGFILE} '
                 /((set \+o$)|xtrace)/ { next }
                 {
@@ -556,7 +561,7 @@ if [[ -n "$LOGFILE" ]]; then
                     print
                     fflush("")
                 }' ) 2>&1
-        # Set up a second fd for output
+        # Set fd 6 to summary log file
         exec 6> >( tee "${SUMFILE}" )
     else
         # Set fd 1 and 2 to primary logfile
@@ -571,7 +576,8 @@ if [[ -n "$LOGFILE" ]]; then
     ln -sf $SUMFILE $LINKDIR/$LOGFILENAME.summary
 else
     # Set up output redirection without log files
-    # Copy stdout to fd 3
+    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
+    # stdout later.
     exec 3>&1
     if [[ "$VERBOSE" != "True" ]]; then
         # Throw away stdout and stderr
@@ -613,6 +619,10 @@ function exit_trap {
         echo "exit_trap: cleaning up child processes"
         kill 2>&1 $jobs
     fi
+
+    # Kill the last spinner process
+    kill_spinner
+
     exit $r
 }
 
