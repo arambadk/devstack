@@ -430,13 +430,13 @@ function create_neutron_initial_network {
     else
 	if [[ "$Q_PLUGIN" == "cisco" ]]; then
             if _has_n1kv_subplugin; then
-	        N1KV_VLAN_NET_SEGMENT_RANGE=${N1KV_VLAN_NET_SEGMENT_RANGE:-"100-499"} 
-	        N1KV_VLAN_NET_PROFILE_NAME=${N1KV_VLAN_NET_PROFILE_NAME:-vlan_test_profile}
+	        N1KV_VLAN_NET_SEGMENT_RANGE=${N1KV_VLAN_NET_SEGMENT_RANGE:-"101-499"} 
+	        N1KV_VLAN_NET_PROFILE_NAME=${N1KV_VLAN_NET_PROFILE_NAME:-default_network_profile}
 	        PROFILE_ID=$(neutron cisco-network-profile-create --segment_range $N1KV_VLAN_NET_SEGMENT_RANGE --physical_network p1 $N1KV_VLAN_NET_PROFILE_NAME vlan | grep ' id ' | get_field 2)
                 PROFILE_ARG="--n1kv:profile-id=$PROFILE_ID"
             fi
         fi
-        NET_ID=$(neutron net-create $PROFILE_ARG --tenant-id $TENANT_ID "$PRIVATE_NETWORK_NAME" | grep ' id ' | get_field 2)
+        NET_ID=$(neutron net-create "$PROFILE_ARG" --tenant-id $TENANT_ID "$PRIVATE_NETWORK_NAME" | grep ' id ' | get_field 2)
         die_if_not_set $LINENO NET_ID "Failure creating NET_ID for $PHYSICAL_NETWORK $TENANT_ID"
         SUBNET_ID=$(neutron subnet-create --tenant-id $TENANT_ID --ip_version 4 --gateway $NETWORK_GATEWAY --name $PRIVATE_SUBNET_NAME $NET_ID $FIXED_RANGE | grep ' id ' | get_field 2)
         die_if_not_set $LINENO SUBNET_ID "Failure creating SUBNET_ID for $TENANT_ID"
@@ -455,7 +455,7 @@ function create_neutron_initial_network {
         fi
         neutron router-interface-add $ROUTER_ID $SUBNET_ID
         # Create an external network, and a subnet. Configure the external network as router gw
-        EXT_NET_ID=$(neutron net-create "$PUBLIC_NETWORK_NAME" -- --router:external=True | grep ' id ' | get_field 2)
+        EXT_NET_ID=$(neutron net-create "$PUBLIC_NETWORK_NAME" -- --router:external=True "$PROFILE_ARG" | grep ' id ' | get_field 2)
         die_if_not_set $LINENO EXT_NET_ID "Failure creating EXT_NET_ID for $PUBLIC_NETWORK_NAME"
         EXT_GW_IP=$(neutron subnet-create --ip_version 4 ${Q_FLOATING_ALLOCATION_POOL:+--allocation-pool $Q_FLOATING_ALLOCATION_POOL} --gateway $PUBLIC_NETWORK_GATEWAY --name $PUBLIC_SUBNET_NAME $EXT_NET_ID $FLOATING_RANGE -- --enable_dhcp=False | grep 'gateway_ip' | get_field 2)
         die_if_not_set $LINENO EXT_GW_IP "Failure creating EXT_GW_IP"
