@@ -559,6 +559,10 @@ function start_neutron_agents {
     if is_service_enabled q-metering; then
         screen_it q-metering "cd $NEUTRON_DIR && python $AGENT_METERING_BINARY --config-file $NEUTRON_CONF --config-file $METERING_AGENT_CONF_FILENAME"
     fi
+
+    if is_service_enabled ciscocfgagent; then
+        start_the_ciscocfgagent
+    fi
 }
 
 # stop_neutron - Stop running processes (non-screen)

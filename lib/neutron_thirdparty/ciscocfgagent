@@ -35,6 +35,13 @@ function install_ciscocfgagent {
 }
 
 function start_ciscocfgagent {
+    # We do not start the cfg agent using the 3rd party system mechanism
+    # since it starts the 3rd party systems before neutron server.
+    :
+}
+
+function start_the_ciscocfgagent {
+    # We start the cfg agent when the other agents are started
     # Need to enable q-ciscocfgagent due to how is_service_enabled function works
     enable_service q-ciscocfgagent
     CISCO_CFG_CONF_FILES="--config-file $NEUTRON_CONF --config-file=$Q_CISCO_CFGAGENT_CONF_FILE"
