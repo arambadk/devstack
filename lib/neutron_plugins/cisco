@@ -35,6 +35,9 @@ Q_CISCO_PLUGIN_INTEGRATION_BRIDGE=${Q_CISCO_PLUGIN_INTEGRATION_BRIDGE:-br-int}
 # Specify the host management interface required by uVEM
 Q_CISCO_PLUGIN_HOST_MGMT_INTF=${Q_CISCO_PLUGIN_HOST_MGMT_INTF:-eth0}
 
+# Specify the upstream (public) interface required by uVEM
+Q_CISCO_PLUGIN_UPSTREAM_INTF=${Q_CISCO_PLUGIN_UPSTREAM_INTF:-}
+
 # Specify if tunneling is enabled
 Q_CISCO_PLUGIN_ENABLE_TUNNELING=${Q_CISCO_PLUGIN_ENABLE_TUNNELING:-True}
 
@@ -958,7 +961,7 @@ function write_n1kv_conf {
 	# Description: MAC address of VSM's Control I/F
 	# Optional: No
 	# Default: n/a
-	system-primary-mac -INTF
+	# system-primary-mac -INTF
 
 	# TAG: host-mgmt-intf
 	# Description: Management interface of the Host
@@ -1079,11 +1082,17 @@ function _configure_uvem {
     if [[ "$Q_CISCO_PLUGIN_VSM_IP" != "" ]]; then
         n1k_iniset $n1kv_temp_file l3control-ipaddr $Q_CISCO_PLUGIN_VSM_IP
     fi
-    if [[ "${vsm_info[0]}" != "" ]]; then
-        n1k_iniset $n1kv_temp_file system-primary-mac ${vsm_info[0]}
-    fi
+    # if [[ "${vsm_info[0]}" != "" ]]; then
+    #     n1k_iniset $n1kv_temp_file system-primary-mac ${vsm_info[0]}
+    # fi
     if [[ "$Q_CISCO_PLUGIN_HOST_MGMT_INTF" != "" ]]; then
         n1k_iniset $n1kv_temp_file host-mgmt-intf $Q_CISCO_PLUGIN_HOST_MGMT_INTF
+    fi
+    if [[ "$Q_CISCO_PLUGIN_UPSTREAM_INTF" != "" ]]; then
+        n1k_iniset $n1kv_temp_file phys "$Q_CISCO_PLUGIN_UPSTREAM_INTF profile sys-uplink"
+	# Make sure we add it to br-int as well, and force it up
+	sudo ovs-vsctl -- --may-exist add-port br-int $Q_CISCO_PLUGIN_UPSTREAM_INTF
+        sudo ifconfig $Q_CISCO_PLUGIN_UPSTREAM_INTF up
     fi
     if [[ "$Q_CISCO_PLUGIN_INTEGRATION_BRIDGE" != "" ]]; then
         n1k_iniset $n1kv_temp_file uvem-ovs-brname $Q_CISCO_PLUGIN_INTEGRATION_BRIDGE
