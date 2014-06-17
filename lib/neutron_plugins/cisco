@@ -8,9 +8,6 @@ set +o xtrace
 # Name of cisco router plugin
 Q_CISCO_ROUTER_PLUGIN=${Q_CISCO_ROUTER_PLUGIN:-}
 
-# Name of cisco device manager plugin
-Q_CISCO_DEVICE_MANAGER_PLUGIN=${Q_CISCO_DEVICE_MANAGER_PLUGIN:-}
-
 # Indicate if a VSM instance should be created
 Q_CISCO_PLUGIN_DEVSTACK_VSM=${Q_CISCO_PLUGIN_DEVSTACK_VSM:-True}
 
@@ -94,13 +91,6 @@ function _has_n1kv_subplugin {
 
 function _has_cisco_router_plugin {
     if [[ "$Q_CISCO_ROUTER_PLUGIN" != "" ]]; then
-        return 0
-    fi
-    return 1
-}
-
-function _has_cisco_device_manager_plugin {
-    if [[ "$Q_CISCO_DEVICE_MANAGER_PLUGIN" != "" ]]; then
         return 0
     fi
     return 1
@@ -410,10 +400,6 @@ function _configure_cisco_router_plugin {
     if ! is_ciscoconfparse_installed; then
         install_ciscoconfparse
     fi
-}
-
-function _configure_cisco_device_manager_plugin {
-    :
 }
 
 function _configure_nexus_subplugin {
@@ -1224,11 +1210,6 @@ function neutron_plugin_configure_service {
     if _has_cisco_router_plugin; then
         _configure_cisco_router_plugin
     fi
-
-    if _has_cisco_device_manager_plugin; then
-        _configure_cisco_device_manager_plugin
-    fi
-
 }
 
 function neutron_plugin_setup_interface_driver {

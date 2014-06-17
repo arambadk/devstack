@@ -58,7 +58,6 @@ enable_service q-agt
 enable_service q-l3
 enable_service ciscocfgagent
 enable_service q-ciscorouter
-enable_service q-ciscodevicemanager
 
 #LIBVIRT_FIREWALL_DRIVER=nova.virt.firewall.NoopFirewallDriver
 Q_PLUGIN=csr1kv_openvswitch
