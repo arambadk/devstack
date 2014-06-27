@@ -142,7 +142,7 @@ disable_negated_services
 
 # Warn users who aren't on an explicitly supported distro, but allow them to
 # override check and attempt installation with ``FORCE=yes ./stack``
-if [[ ! ${DISTRO} =~ (precise|saucy|trusty|7.0|wheezy|sid|testing|jessie|f19|f20|rhel6) ]]; then
+if [[ ! ${DISTRO} =~ (precise|saucy|trusty|7.0|wheezy|sid|testing|jessie|f19|f20|rhel6|rhel7) ]]; then
     echo "WARNING: this script has not been tested on $DISTRO"
     if [[ "$FORCE" != "yes" ]]; then
         die $LINENO "If you wish to run this script anyway run with FORCE=yes"
@@ -211,6 +211,11 @@ sudo mv $TEMPFILE /etc/sudoers.d/50_stack_sh
 # Additional repos
 # ----------------
 
+# For debian/ubuntu make apt attempt to retry network ops on it's own
+if is_ubuntu; then
+    echo 'APT::Acquire::Retries "20";' | sudo tee /etc/apt/apt.conf.d/80retry
+fi
+
 # Some distros need to add repos beyond the defaults provided by the vendor
 # to pick up required packages.
 
@@ -234,7 +239,7 @@ if [[ is_fedora && $DISTRO =~ (rhel) ]]; then
     fi
     # RHEL requires EPEL for many Open Stack dependencies
     if [[ $DISTRO =~ (rhel7) ]]; then
-        EPEL_RPM=${RHEL7_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-0.1.noarch.rpm"}
+        EPEL_RPM=${RHEL7_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-0.2.noarch.rpm"}
     else
         EPEL_RPM=${RHEL6_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"}
     fi
@@ -246,7 +251,12 @@ if [[ is_fedora && $DISTRO =~ (rhel) ]]; then
 
     # ... and also optional to be enabled
     is_package_installed yum-utils || install_package yum-utils
-    sudo yum-config-manager --enable rhel-6-server-optional-rpms
+    if [[ $DISTRO =~ (rhel7) ]]; then
+        OPTIONAL_REPO=rhel-7-server-optional-rpms
+    else
+        OPTIONAL_REPO=rhel-6-server-optional-rpms
+    fi
+    sudo yum-config-manager --enable ${OPTIONAL_REPO}
 
 fi
 
@@ -549,14 +559,14 @@ if [[ -n "$LOGFILE" ]]; then
     exec 3>&1
     if [[ "$VERBOSE" == "True" ]]; then
         # Set fd 1 and 2 to write the log file
-        exec 1> >( ./tools/outfilter.py -v -o "${LOGFILE}" ) 2>&1
+        exec 1> >( $TOP_DIR/tools/outfilter.py -v -o "${LOGFILE}" ) 2>&1
         # Set fd 6 to summary log file
-        exec 6> >( ./tools/outfilter.py -o "${SUMFILE}" )
+        exec 6> >( $TOP_DIR/tools/outfilter.py -o "${SUMFILE}" )
     else
         # Set fd 1 and 2 to primary logfile
-        exec 1> >( ./tools/outfilter.py -o "${LOGFILE}" ) 2>&1
+        exec 1> >( $TOP_DIR/tools/outfilter.py -o "${LOGFILE}" ) 2>&1
         # Set fd 6 to summary logfile and stdout
-        exec 6> >( ./tools/outfilter.py -v -o "${SUMFILE}" >&3 )
+        exec 6> >( $TOP_DIR/tools/outfilter.py -v -o "${SUMFILE}" >&3 )
     fi
 
     echo_summary "stack.sh log $LOGFILE"
@@ -573,7 +583,7 @@ else
         exec 1>/dev/null 2>&1
     fi
     # Always send summary fd to original stdout
-    exec 6> >( ./tools/outfilter.py -v >&3 )
+    exec 6> >( $TOP_DIR/tools/outfilter.py -v >&3 )
 fi
 
 # Set up logging of screen windows
@@ -611,6 +621,11 @@ function exit_trap {
 
     # Kill the last spinner process
     kill_spinner
+
+    if [[ $r -ne 0 ]]; then
+        echo "Error on exit"
+        ./tools/worlddump.py -d $LOGDIR
+    fi
 
     exit $r
 }
@@ -753,6 +768,8 @@ if is_service_enabled nova; then
 fi
 
 if is_service_enabled horizon; then
+    # django openstack_auth
+    install_django_openstack_auth
     # dashboard
     install_horizon
     configure_horizon
@@ -914,7 +931,7 @@ if is_service_enabled key; then
     start_keystone
 
     # Set up a temporary admin URI for Keystone
-    SERVICE_ENDPOINT=$KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_AUTH_HOST:$KEYSTONE_AUTH_PORT/v2.0
+    SERVICE_ENDPOINT=$KEYSTONE_AUTH_URI/v2.0
 
     if is_service_enabled tls-proxy; then
         export OS_CACERT=$INT_CA_DIR/ca-chain.pem
@@ -1163,7 +1180,7 @@ fi
 
 if is_service_enabled zeromq; then
     echo_summary "Starting zermomq receiver"
-    screen_it zeromq "cd $NOVA_DIR && $NOVA_BIN_DIR/nova-rpc-zmq-receiver"
+    screen_it zeromq "cd $NOVA_DIR && $OSLO_BIN_DIR/oslo-messaging-zmq-receiver"
 fi
 
 # Launch the nova-api and wait for it to answer before continuing
@@ -1348,7 +1365,7 @@ fi
 
 # If Keystone is present you can point ``nova`` cli to this server
 if is_service_enabled key; then
-    echo "Keystone is serving at $KEYSTONE_AUTH_PROTOCOL://$SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0/"
+    echo "Keystone is serving at $KEYSTONE_SERVICE_URI/v2.0/"
     echo "Examples on using novaclient command line is in exercise.sh"
     echo "The default users are: admin and demo"
     echo "The password: $ADMIN_PASSWORD"

@@ -133,6 +133,10 @@ HEATCLIENT_BRANCH=${HEATCLIENT_BRANCH:-master}
 HORIZON_REPO=${HORIZON_REPO:-${GIT_BASE}/openstack/horizon.git}
 HORIZON_BRANCH=${HORIZON_BRANCH:-master}
 
+# django openstack_auth library
+HORIZONAUTH_REPO=${HORIZONAUTH_REPO:-${GIT_BASE}/openstack/django_openstack_auth.git}
+HORIZONAUTH_BRANCH=${HORIZONAUTH_BRANCH:-master}
+
 # baremetal provisionint service
 IRONIC_REPO=${IRONIC_REPO:-${GIT_BASE}/openstack/ironic.git}
 IRONIC_BRANCH=${IRONIC_BRANCH:-master}
@@ -362,7 +366,7 @@ fi
 PRECACHE_IMAGES=$(trueorfalse False $PRECACHE_IMAGES)
 if [[ "$PRECACHE_IMAGES" == "True" ]]; then
     # staging in update for nodepool
-    IMAGE_URLS+=",https://dl.fedoraproject.org/pub/fedora/linux/updates/20/Images/x86_64/Fedora-x86_64-20-20140407-sda.qcow2"
+    IMAGE_URLS+=",http://dl.fedoraproject.org/pub/alt/openstack/20/x86_64/Fedora-x86_64-20-20140618-sda.qcow2"
 fi
 
 # 10Gb default volume backing file size

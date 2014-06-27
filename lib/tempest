@@ -149,6 +149,7 @@ function configure_tempest {
     TEMPEST_TENANT_NAME=${TEMPEST_TENANT_NAME:-demo}
     ALT_USERNAME=${ALT_USERNAME:-alt_demo}
     ALT_TENANT_NAME=${ALT_TENANT_NAME:-alt_demo}
+    ADMIN_TENANT_ID=$(openstack project list | awk "/ admin / { print \$2 }")
 
     # If the ``DEFAULT_INSTANCE_TYPE`` not declared, use the new behavior
     # Tempest creates instane types for himself
@@ -256,6 +257,7 @@ function configure_tempest {
     iniset $TEMPEST_CONFIG identity admin_username $ADMIN_USERNAME
     iniset $TEMPEST_CONFIG identity admin_password "$password"
     iniset $TEMPEST_CONFIG identity admin_tenant_name $ADMIN_TENANT_NAME
+    iniset $TEMPEST_CONFIG identity admin_tenant_id $ADMIN_TENANT_ID
     iniset $TEMPEST_CONFIG identity admin_domain_name $ADMIN_DOMAIN_NAME
     iniset $TEMPEST_CONFIG identity auth_version ${TEMPEST_AUTH_VERSION:-v2}
 
@@ -281,6 +283,7 @@ function configure_tempest {
     iniset $TEMPEST_CONFIG compute ssh_connect_method $ssh_connect_method
 
     # Compute Features
+    iniset $TEMPEST_CONFIG compute-feature-enabled api_v3 ${TEMPEST_NOVA_API_V3:-False}
     iniset $TEMPEST_CONFIG compute-feature-enabled resize True
     iniset $TEMPEST_CONFIG compute-feature-enabled live_migration ${LIVE_MIGRATION_AVAILABLE:-False}
     iniset $TEMPEST_CONFIG compute-feature-enabled change_password False
@@ -316,10 +319,10 @@ function configure_tempest {
         if [[ ! -z "$HEAT_CFN_IMAGE_URL" ]]; then
             iniset $TEMPEST_CONFIG orchestration image_ref $(basename "$HEAT_CFN_IMAGE_URL" ".qcow2")
         fi
-        # build a specialized heat flavor that is likely to be fast
+        # build a specialized heat flavor
         available_flavors=$(nova flavor-list)
         if [[ ! ( $available_flavors =~ 'm1.heat' ) ]]; then
-            nova flavor-create m1.heat 451 1024 0 2
+            nova flavor-create m1.heat 451 512 0 1
         fi
         iniset $TEMPEST_CONFIG orchestration instance_type "m1.heat"
         iniset $TEMPEST_CONFIG orchestration build_timeout 900

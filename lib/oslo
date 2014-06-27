@@ -30,6 +30,9 @@ PYCADF_DIR=$DEST/pycadf
 STEVEDORE_DIR=$DEST/stevedore
 TASKFLOW_DIR=$DEST/taskflow
 
+# Support entry points installation of console scripts
+OSLO_BIN_DIR=$(get_python_exec_prefix)
+
 # Entry Points
 # ------------
 
@@ -50,6 +53,9 @@ function install_oslo {
 
     git_clone $OSLORWRAP_REPO $OSLORWRAP_DIR $OSLORWRAP_BRANCH
     setup_install $OSLORWRAP_DIR
+
+    git_clone $OSLODB_REPO $OSLODB_DIR $OSLODB_BRANCH
+    setup_install $OSLODB_DIR
 
     git_clone $OSLOVMWARE_REPO $OSLOVMWARE_DIR $OSLOVMWARE_BRANCH
     setup_install $OSLOVMWARE_DIR

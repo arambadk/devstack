@@ -41,6 +41,10 @@ KEYSTONE_WSGI_DIR=${KEYSTONE_WSGI_DIR:-/var/www/keystone}
 
 KEYSTONECLIENT_DIR=$DEST/python-keystoneclient
 
+# Set up additional extensions, such as oauth1, federation
+# Example of KEYSTONE_EXTENSIONS=oauth1,federation
+KEYSTONE_EXTENSIONS=${KEYSTONE_EXTENSIONS:-}
+
 # Select the backend for Keystone's service catalog
 KEYSTONE_CATALOG_BACKEND=${KEYSTONE_CATALOG_BACKEND:-sql}
 KEYSTONE_CATALOG=$KEYSTONE_CONF_DIR/default_catalog.templates
@@ -56,7 +60,7 @@ KEYSTONE_ASSIGNMENT_BACKEND=${KEYSTONE_ASSIGNMENT_BACKEND:-sql}
 
 # Select Keystone's token format
 # Choose from 'UUID', 'PKI', or 'PKIZ'
-KEYSTONE_TOKEN_FORMAT=${KEYSTONE_TOKEN_FORMAT:-PKI}
+KEYSTONE_TOKEN_FORMAT=$(echo ${KEYSTONE_TOKEN_FORMAT} | tr '[:upper:]' '[:lower:]')
 
 # Set Keystone interface configuration
 KEYSTONE_AUTH_HOST=${KEYSTONE_AUTH_HOST:-$SERVICE_HOST}
@@ -86,6 +90,10 @@ if is_ssl_enabled_service "key"; then
     KEYSTONE_AUTH_PROTOCOL="https"
     KEYSTONE_SERVICE_PROTOCOL="https"
 fi
+
+# complete URIs
+KEYSTONE_AUTH_URI=${KEYSTONE_AUTH_PROTOCOL}://${KEYSTONE_AUTH_HOST}:${KEYSTONE_AUTH_PORT}
+KEYSTONE_SERVICE_URI=${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}:${KEYSTONE_SERVICE_PORT}
 
 # Functions
 # ---------
@@ -149,6 +157,8 @@ function configure_keystone {
         KEYSTONE_PASTE_INI="$KEYSTONE_CONF"
     fi
 
+    configure_keystone_extensions
+
     # Rewrite stock ``keystone.conf``
 
     if is_service_enabled ldap; then
@@ -200,10 +210,8 @@ function configure_keystone {
 
     iniset $KEYSTONE_CONF DEFAULT admin_token "$SERVICE_TOKEN"
 
-    if [[ "$KEYSTONE_TOKEN_FORMAT" = "UUID" ]]; then
-        iniset $KEYSTONE_CONF token provider keystone.token.providers.uuid.Provider
-    elif [[ "$KEYSTONE_TOKEN_FORMAT" = "PKIZ" ]]; then
-        iniset $KEYSTONE_CONF token provider keystone.token.providers.pkiz.Provider
+    if [[ "$KEYSTONE_TOKEN_FORMAT" != "" ]]; then
+        iniset $KEYSTONE_CONF token provider keystone.token.providers.$KEYSTONE_TOKEN_FORMAT.Provider
     fi
 
     iniset $KEYSTONE_CONF database connection `database_connection_url keystone`
@@ -269,6 +277,25 @@ function configure_keystone {
         iniset $KEYSTONE_CONF DEFAULT logging_exception_prefix "%(process)d TRACE %(name)s %(instance)s"
         _config_keystone_apache_wsgi
     fi
+}
+
+function configure_keystone_extensions {
+    # Add keystone extension into keystone v3 application pipeline
+    local extension_value
+    local api_v3
+    local extension
+    local api_v3_extension
+    for extension_value in ${KEYSTONE_EXTENSIONS//,/ }; do
+        if [[ -z "${extension_value}" ]]; then
+            continue
+        fi
+        api_v3=$(iniget $KEYSTONE_PASTE_INI pipeline:api_v3 pipeline)
+        extension=$(echo $api_v3 | sed -ne "/${extension_value}/ p;" )
+        if [[ -z $extension ]]; then
+            api_v3_extension=$(echo $api_v3 | sed -ne "s/service_v3/${extension_value}_extension service_v3/p;" )
+            iniset $KEYSTONE_PASTE_INI pipeline:api_v3 pipeline "$api_v3_extension"
+        fi
+    done
 }
 
 # create_keystone_accounts() - Sets up common required keystone accounts
@@ -384,7 +411,15 @@ function init_keystone {
     # Initialize keystone database
     $KEYSTONE_DIR/bin/keystone-manage db_sync
 
-    if [[ "$KEYSTONE_TOKEN_FORMAT" == "PKI" || "$KEYSTONE_TOKEN_FORMAT" == "PKIZ" ]]; then
+    local extension_value
+    for extension_value in ${KEYSTONE_EXTENSIONS//,/ }; do
+        if [[ -z "${extension_value}" ]]; then
+            continue
+        fi
+        $KEYSTONE_DIR/bin/keystone-manage db_sync --extension "${extension_value}"
+    done
+
+    if [[ "$KEYSTONE_TOKEN_FORMAT" != "uuid" ]]; then
         # Set up certificates
         rm -rf $KEYSTONE_CONF_DIR/ssl
         $KEYSTONE_DIR/bin/keystone-manage pki_setup
@@ -444,7 +479,10 @@ function start_keystone {
     fi
 
     echo "Waiting for keystone to start..."
-    if ! timeout $SERVICE_TIMEOUT sh -c "while ! curl --noproxy '*' -k -s $KEYSTONE_AUTH_PROTOCOL://$SERVICE_HOST:$service_port/v$IDENTITY_API_VERSION/ >/dev/null; do sleep 1; done"; then
+    # Check that the keystone service is running. Even if the tls tunnel
+    # should be enabled, make sure the internal port is checked using
+    # unencryted traffic at this point.
+    if ! timeout $SERVICE_TIMEOUT sh -c "while ! curl --noproxy '*' -k -s http://$KEYSTONE_SERVICE_HOST:$service_port/v$IDENTITY_API_VERSION/ >/dev/null; do sleep 1; done"; then
         die $LINENO "keystone did not start"
     fi
 
