@@ -456,9 +456,7 @@ function create_nova_conf {
 
         # Add keystone authtoken configuration
 
-        iniset $NOVA_CONF keystone_authtoken auth_host $KEYSTONE_AUTH_HOST
-        iniset $NOVA_CONF keystone_authtoken auth_port $KEYSTONE_AUTH_PORT
-        iniset $NOVA_CONF keystone_authtoken auth_protocol $KEYSTONE_AUTH_PROTOCOL
+        iniset $NOVA_CONF keystone_authtoken identity_uri $KEYSTONE_AUTH_URI
         iniset $NOVA_CONF keystone_authtoken admin_tenant_name $SERVICE_TENANT_NAME
         iniset $NOVA_CONF keystone_authtoken cafile $KEYSTONE_SSL_CA
         iniset $NOVA_CONF keystone_authtoken admin_user nova
@@ -550,7 +548,7 @@ function create_nova_conf {
 
     iniset $NOVA_CONF DEFAULT ec2_dmz_host "$EC2_DMZ_HOST"
     iniset_rpc_backend nova $NOVA_CONF DEFAULT
-    iniset $NOVA_CONF DEFAULT glance_api_servers "$GLANCE_HOSTPORT"
+    iniset $NOVA_CONF glance api_servers "$GLANCE_HOSTPORT"
 }
 
 function init_nova_cells {
