@@ -8,7 +8,7 @@ RECLONE=yes
 
 GIT_BASE=${GIT_BASE:-https://github.com}
 NEUTRON_REPO=${GIT_BASE}/CiscoSystems/neutron.git
-NEUTRON_BRANCH=csr1kv_for_routing_juno
+NEUTRON_BRANCH=csr1kv_for_routing_juno_minimal
 # Cisco doesn't currently have a requirements fork so use bob's fork
 REQUIREMENTS_REPO=${GIT_BASE}/bobmel/requirements.git
 REQUIREMENTS_BRANCH=csr1kv_for_routing_juno
