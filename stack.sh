@@ -669,6 +669,18 @@ fi
 # Do the ugly hacks for borken packages and distros
 $TOP_DIR/tools/fixup_stuff.sh
 
+
+# Extras Pre-install
+# ------------------
+
+# Phase: pre-install
+if [[ -d $TOP_DIR/extras.d ]]; then
+    for i in $TOP_DIR/extras.d/*.sh; do
+        [[ -r $i ]] && source $i stack pre-install
+    done
+fi
+
+
 install_rpc_backend
 
 if is_service_enabled $DATABASE_BACKENDS; then
@@ -730,8 +742,10 @@ git_clone $OPENSTACKCLIENT_REPO $OPENSTACKCLIENT_DIR $OPENSTACKCLIENT_BRANCH
 setup_develop $OPENSTACKCLIENT_DIR
 
 if is_service_enabled key; then
-    install_keystone
-    configure_keystone
+    if [ "$KEYSTONE_AUTH_HOST" == "$SERVICE_HOST" ]; then
+        install_keystone
+        configure_keystone
+    fi
 fi
 
 if is_service_enabled s-proxy; then
@@ -930,8 +944,11 @@ fi
 
 if is_service_enabled key; then
     echo_summary "Starting Keystone"
-    init_keystone
-    start_keystone
+
+    if [ "$KEYSTONE_AUTH_HOST" == "$SERVICE_HOST" ]; then
+        init_keystone
+        start_keystone
+    fi
 
     # Set up a temporary admin URI for Keystone
     SERVICE_ENDPOINT=$KEYSTONE_AUTH_URI/v2.0
@@ -972,6 +989,7 @@ if is_service_enabled key; then
     export OS_TENANT_NAME=admin
     export OS_USERNAME=admin
     export OS_PASSWORD=$ADMIN_PASSWORD
+    export OS_REGION_NAME=$REGION_NAME
 fi
 
 

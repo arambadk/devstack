@@ -19,6 +19,9 @@ else
     STACK_USER=$(whoami)
 fi
 
+# Specify region name Region
+REGION_NAME=${REGION_NAME:-RegionOne}
+
 # Specify which services to launch.  These generally correspond to
 # screen tabs. To change the default list, use the ``enable_service`` and
 # ``disable_service`` functions in ``local.conf``.
@@ -48,6 +51,12 @@ if [[ -z "$ENABLED_SERVICES" ]]; then
     # additional services
     ENABLED_SERVICES+=,rabbit,tempest,mysql
 fi
+
+# Global toggle for enabling services under mod_wsgi. If this is set to
+# ``True`` all services that use HTTPD + mod_wsgi as the preferred method of
+# deployment, will be deployed under Apache. If this is set to ``False`` all
+# services will rely on the local toggle variable (e.g. ``KEYSTONE_USE_MOD_WSGI``)
+ENABLE_HTTPD_MOD_WSGI_SERVICES=True
 
 # Tell Tempest which services are available.  The default is set here as
 # Tempest falls late in the configuration sequence.  This differs from
@@ -182,6 +191,10 @@ OSLOCFG_BRANCH=${OSLOCFG_BRANCH:-master}
 # oslo.db
 OSLODB_REPO=${OSLODB_REPO:-${GIT_BASE}/openstack/oslo.db.git}
 OSLODB_BRANCH=${OSLODB_BRANCH:-master}
+
+# oslo.i18n
+OSLOI18N_REPO=${OSLOI18N_REPO:-${GIT_BASE}/openstack/oslo.i18n.git}
+OSLOI18N_BRANCH=${OSLOI18N_BRANCH:-master}
 
 # oslo.messaging
 OSLOMSG_REPO=${OSLOMSG_REPO:-${GIT_BASE}/openstack/oslo.messaging.git}
@@ -360,7 +373,7 @@ esac
 if [[ "$ENABLED_SERVICES" =~ 'h-api' ]]; then
     case "$VIRT_DRIVER" in
         libvirt|baremetal|ironic)
-            HEAT_CFN_IMAGE_URL=${HEAT_CFN_IMAGE_URL:-"https://dl.fedoraproject.org/pub/fedora/linux/releases/20/Images/x86_64/Fedora-x86_64-20-20131211.1-sda.qcow2"}
+            HEAT_CFN_IMAGE_URL=${HEAT_CFN_IMAGE_URL:-"http://dl.fedoraproject.org/pub/alt/openstack/20/x86_64/Fedora-x86_64-20-20140618-sda.qcow2"}
             IMAGE_URLS+=",$HEAT_CFN_IMAGE_URL"
             ;;
         *)
@@ -385,7 +398,10 @@ fi
 PRECACHE_IMAGES=$(trueorfalse False $PRECACHE_IMAGES)
 if [[ "$PRECACHE_IMAGES" == "True" ]]; then
     # staging in update for nodepool
-    IMAGE_URLS+=",http://dl.fedoraproject.org/pub/alt/openstack/20/x86_64/Fedora-x86_64-20-20140618-sda.qcow2"
+    IMAGE_URL="http://dl.fedoraproject.org/pub/alt/openstack/20/x86_64/Fedora-x86_64-20-20140618-sda.qcow2"
+    if ! [[ "$IMAGE_URLS"  =~ "$IMAGE_URL" ]]; then
+        IMAGE_URLS+=",$IMAGE_URL"
+    fi
 fi
 
 # 10Gb default volume backing file size

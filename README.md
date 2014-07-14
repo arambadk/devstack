@@ -133,11 +133,25 @@ Example (Qpid):
 
 # Apache Frontend
 
-Apache web server is enabled for wsgi services by setting
-`APACHE_ENABLED_SERVICES` in your ``localrc`` section.  Remember to
-enable these services at first as above.
+Apache web server can be enabled for wsgi services that support being deployed
+under HTTPD + mod_wsgi. By default, services that recommend running under
+HTTPD + mod_wsgi are deployed under Apache. To use an alternative deployment
+strategy (e.g. eventlet) for services that support an alternative to HTTPD +
+mod_wsgi set ``ENABLE_HTTPD_MOD_WSGI_SERVICES`` to ``False`` in your
+``local.conf``.
 
-    APACHE_ENABLED_SERVICES+=key,swift
+Each service that can be run under HTTPD + mod_wsgi also has an override
+toggle available that can be set in your ``local.conf``.
+
+Keystone is run under HTTPD + mod_wsgi by default.
+
+Example (Keystone):
+
+    KEYSTONE_USE_MOD_WSGI="True"
+
+Example (Swift):
+
+    SWIFT_USE_MOD_WSGI="True"
 
 # Swift
 
@@ -329,6 +343,25 @@ which includes the following, with the IP address of the above controller node:
     RABBIT_HOST=$SERVICE_HOST
     Q_HOST=$SERVICE_HOST
     MATCHMAKER_REDIS_HOST=$SERVICE_HOST
+
+# Multi-Region Setup
+
+We want to setup two devstack (RegionOne and RegionTwo) with shared keystone
+(same users and services) and horizon.
+Keystone and Horizon will be located in RegionOne.
+Full spec is available at:
+https://wiki.openstack.org/wiki/Heat/Blueprints/Multi_Region_Support_for_Heat.
+
+In RegionOne:
+
+    REGION_NAME=RegionOne
+
+In RegionTwo:
+
+    disable_service horizon
+    KEYSTONE_SERVICE_HOST=<KEYSTONE_IP_ADDRESS_FROM_REGION_ONE>
+    KEYSTONE_AUTH_HOST=<KEYSTONE_IP_ADDRESS_FROM_REGION_ONE>
+    REGION_NAME=RegionTwo
 
 # Cells
 
