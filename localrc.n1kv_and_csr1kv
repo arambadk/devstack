@@ -45,7 +45,7 @@ disable_service n-net
 enable_service neutron
 enable_service q-svc
 disable_service q-agt
-enable_service q-l3
+disable_service q-l3
 enable_service q-dhcp
 enable_service ciscocfgagent
 enable_service q-ciscorouter
