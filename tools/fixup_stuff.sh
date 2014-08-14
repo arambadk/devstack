@@ -93,24 +93,6 @@ if [[ -d $dir ]]; then
     sudo chmod +r $dir/*
 fi
 
-# Ubuntu 12.04
-# ------------
-
-# We can regularly get kernel crashes on the 12.04 default kernel, so attempt
-# to install a new kernel
-if [[ ${DISTRO} =~ (precise) ]]; then
-    # Finally, because we suspect the Precise kernel is problematic, install a new kernel
-    UPGRADE_KERNEL=$(trueorfalse False $UPGRADE_KERNEL)
-    if [[ $UPGRADE_KERNEL == "True" ]]; then
-        if [[ ! `uname -r` =~ (^3\.11) ]]; then
-            apt_get install linux-generic-lts-saucy
-            echo "Installing Saucy LTS kernel, please reboot before proceeding"
-            exit 1
-        fi
-    fi
-fi
-
-
 if is_fedora; then
     # Disable selinux to avoid configuring to allow Apache access
     # to Horizon files (LP#1175444)
@@ -123,6 +105,14 @@ fi
 # -----
 
 if [[ $DISTRO =~ (rhel6) ]]; then
+
+    # install_pip.sh installs the latest setuptools over the packaged
+    # version.  We can't really uninstall the packaged version if it
+    # is there, because it may remove other important things like
+    # cloud-init.  Things work, but there can be an old egg file left
+    # around from the package that causes some really strange
+    # setuptools errors.  Remove it, if it is there
+    sudo rm -f /usr/lib/python2.6/site-packages/setuptools-0.6*.egg-info
 
     # If the ``dbus`` package was installed by DevStack dependencies the
     # uuid may not be generated because the service was never started (PR#598200),
