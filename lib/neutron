@@ -43,8 +43,8 @@
 # to run Neutron on this host, make sure that q-svc is also in
 # ``ENABLED_SERVICES``.
 #
-# If you're planning to use the Neutron csr1k_openvswitch plugin, set
-# ``Q_PLUGIN`` to "csr1kv_openvswitch" and make sure the q-agt service is enabled
+# If you're planning to use the Neutron openvswitch plugin, set
+# ``Q_PLUGIN`` to "openvswitch" and make sure the q-agt service is enabled
 # in ``ENABLED_SERVICES``.  If you're planning to use the Neutron
 # linuxbridge plugin, set ``Q_PLUGIN`` to "linuxbridge" and make sure the
 # q-agt service is enabled in ``ENABLED_SERVICES``.
@@ -420,6 +420,9 @@ function create_neutron_accounts {
                 "http://$SERVICE_HOST:$Q_PORT/" \
                 "http://$SERVICE_HOST:$Q_PORT/"
         fi
+    fi
+}
+
 function setup_for_csr1kv {
     if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
 	plugin=ovs
@@ -830,14 +833,14 @@ function _configure_neutron_vpn {
     neutron_vpn_configure_common
 }
 
-function _configure_neutron_cisco_router {
-    neutron_cisco_router_configure_common
-}
 function _configure_dvr {
     iniset $NEUTRON_CONF DEFAULT router_distributed True
     iniset $Q_L3_CONF_FILE DEFAULT agent_mode $Q_DVR_MODE
 }
 
+function _configure_neutron_cisco_router {
+    neutron_cisco_router_configure_common
+}
 
 # _configure_neutron_plugin_agent() - Set config files for neutron plugin agent
 # It is called when q-agt is enabled.
