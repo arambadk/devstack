@@ -529,7 +529,7 @@ function create_neutron_initial_network {
 function init_neutron {
     recreate_database $Q_DB_NAME utf8
     # Run Neutron db migrations
-#BOB    $NEUTRON_BIN_DIR/neutron-db-manage --config-file $NEUTRON_CONF --config-file /$Q_PLUGIN_CONF_FILE upgrade head
+    $NEUTRON_BIN_DIR/neutron-db-manage --config-file $NEUTRON_CONF --config-file /$Q_PLUGIN_CONF_FILE upgrade head
 }
 
 # install_neutron() - Collect source and prepare

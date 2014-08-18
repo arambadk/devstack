@@ -105,7 +105,7 @@ REQUIREMENTS_BRANCH=csr1kv_for_routing_juno
 
 # Neutron service
 NEUTRON_REPO=${GIT_BASE}/CiscoSystems/neutron.git
-NEUTRON_BRANCH=csr1kv_for_routing_juno
+NEUTRON_BRANCH=csr1kv_for_routing_juno_minimal
 
 # Neutron client
 #NEUTRONCLIENT_REPO=${GIT_BASE}/CiscoSystems/python-neutronclient.git
