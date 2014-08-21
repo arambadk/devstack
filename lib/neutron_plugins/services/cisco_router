@@ -24,9 +24,9 @@ function neutron_cisco_router_configure_common() {
     fi
  }
 
-#function neutron_cisco_router_configure_driver() {
-#    :
-#}
+function neutron_cisco_router_configure_driver() {
+    :
+}
 
 function neutron_cisco_router_stop() {
     :

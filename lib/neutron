@@ -425,11 +425,11 @@ function create_neutron_accounts {
 
 function setup_for_csr1kv {
     if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
-	plugin=ovs
+	    plugin=ovs
     elif [[ "$Q_PLUGIN" == "cisco" || "${Q_CISCO_PLUGIN_SUBPLUGINS[0]}" == "n1kv" ]]; then
-	plugin=n1kv
+	    plugin=n1kv
     else
-	die $LINENO "Not a deployment with CSR1kv. Exiting!"
+	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
     echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
     (cd $NEUTRON_DIR/neutron/plugins/cisco/l3/setup/; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
