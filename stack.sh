@@ -632,7 +632,11 @@ function exit_trap {
 
     if [[ $r -ne 0 ]]; then
         echo "Error on exit"
-        ./tools/worlddump.py -d $LOGDIR
+        if [[ -z $LOGDIR ]]; then
+            ./tools/worlddump.py
+        else
+            ./tools/worlddump.py -d $LOGDIR
+        fi
     fi
 
     exit $r
@@ -809,6 +813,7 @@ fi
 
 if is_service_enabled heat; then
     install_heat
+    install_heat_other
     cleanup_heat
     configure_heat
 fi
