@@ -88,7 +88,7 @@ export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/d
 # Default name for Neutron database
 Q_DB_NAME=${Q_DB_NAME:-neutron}
 # Default Neutron Plugin
-Q_PLUGIN=${Q_PLUGIN:-csr1kv_openvswitch}
+Q_PLUGIN=${Q_PLUGIN:-ml2}
 # Default Neutron Port
 Q_PORT=${Q_PORT:-9696}
 # Default Neutron Host
@@ -424,14 +424,12 @@ function create_neutron_accounts {
 }
 
 function setup_for_csr1kv {
-    if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
-	plugin=ovs
-    elif [[ "$Q_PLUGIN" == "cisco" || "${Q_CISCO_PLUGIN_SUBPLUGINS[0]}" == "n1kv" ]]; then
-	plugin=n1kv
+    if [[ "$Q_PLUGIN" == "cisco" || "${Q_CISCO_PLUGIN_SUBPLUGINS[0]}" == "n1kv" ]]; then
+	    plugin=n1kv
     else
-	die $LINENO "Not a deployment with CSR1kv. Exiting!"
+	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
-    echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
+        echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
     (cd $NEUTRON_DIR/neutron/plugins/cisco/l3/setup/; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
 }
 
@@ -862,11 +860,7 @@ function _configure_neutron_service {
     Q_POLICY_FILE=$NEUTRON_CONF_DIR/policy.json
 
     cp $NEUTRON_DIR/etc/api-paste.ini $Q_API_PASTE_FILE
-    if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
-        cp $NEUTRON_DIR/neutron/plugins/csr1kv_openvswitch/copy_to/neutron_etc_dir/policy.json $Q_POLICY_FILE
-    else
-        cp $NEUTRON_DIR/etc/policy.json $Q_POLICY_FILE
-    fi
+    cp $NEUTRON_DIR/etc/policy.json $Q_POLICY_FILE
 
     # Update either configuration file with plugin
     iniset $NEUTRON_CONF DEFAULT core_plugin $Q_PLUGIN_CLASS

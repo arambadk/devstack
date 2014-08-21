@@ -18,15 +18,11 @@ function neutron_cisco_router_configure_common() {
     Q_CISCO_ROUTER_PLUGIN_CONF_FILE=$CISCO_ROUTER_PLUGIN_CONFIG_DIR/cisco_router_plugin.ini
     cp $NEUTRON_DIR/etc/neutron/plugins/cisco/cisco_router_plugin.ini $Q_CISCO_ROUTER_PLUGIN_CONF_FILE
     Q_PLUGIN_EXTRA_CONF_FILES=(${Q_PLUGIN_EXTRA_CONF_FILES[@]} $Q_CISCO_ROUTER_PLUGIN_CONF_FILE)
+}
 
-    if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
-        iniset $Q_CISCO_ROUTER_PLUGIN_CONF_FILE DEFAULT csr1kv_plugging_driver neutron.plugins.cisco.l3.plugging_drivers.ovs_trunking_driver.OvsTrunkingPlugDriver
-    fi
- }
-
-#function neutron_cisco_router_configure_driver() {
-#    :
-#}
+function neutron_cisco_router_configure_driver() {
+    :
+}
 
 function neutron_cisco_router_stop() {
     :
