@@ -86,7 +86,8 @@ NEUTRON_CONF=$NEUTRON_CONF_DIR/neutron.conf
 export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/debug.ini"}
 
 # BOB: Added for devstack runs as part of CI for code not yet upstream
-CISCO_PATCH_NEUTRON=$(trueorfalse False $CISCO_PATCH_NEUTRON)
+Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR=${Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR:-$NEUTRON_DIR/neutron/plugins/cisco/l3/setup/}
+Q_CISCO_PATCH_NEUTRON=$(trueorfalse False $Q_CISCO_PATCH_NEUTRON)
 source $TOP_DIR/lib/cisco_patching_functions
 # BOB: Added for devstack runs as part of CI for code not yet upstream
 
@@ -437,7 +438,7 @@ function setup_for_csr1kv {
 	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
     echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
-    (cd $NEUTRON_DIR/neutron/plugins/cisco/l3/setup/; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
+    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
 }
 
 function create_neutron_initial_network {
@@ -541,7 +542,7 @@ function init_neutron {
 function install_neutron {
     git_clone $NEUTRON_REPO $NEUTRON_DIR $NEUTRON_BRANCH
     # BOB: Added for devstack runs as part of CI for code not yet upstream
-    if [[ "$CISCO_PATCH_NEUTRON" == "True" ]]; then
+    if [[ "$Q_CISCO_PATCH_NEUTRON" == "True" ]]; then
         echo -n "Patching Neutron with patch under review ... "
         result=$(patch_neutron_with_patch_under_review "$PATCH_REPO" "$BRANCH_NAME_PREFIX" "$SEPARATOR" "$NEUTRON_DIR")
         echo $result
