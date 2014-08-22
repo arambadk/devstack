@@ -85,6 +85,11 @@ NEUTRON_CONF_DIR=/etc/neutron
 NEUTRON_CONF=$NEUTRON_CONF_DIR/neutron.conf
 export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/debug.ini"}
 
+# BOB: Added for devstack runs as part of CI for code not yet upstream
+CISCO_PATCH_NEUTRON=$(trueorfalse False $CISCO_PATCH_NEUTRON)
+source $TOP_DIR/lib/cisco_patching_functions
+# BOB: Added for devstack runs as part of CI for code not yet upstream
+
 # Default name for Neutron database
 Q_DB_NAME=${Q_DB_NAME:-neutron}
 # Default Neutron Plugin
@@ -535,6 +540,16 @@ function init_neutron {
 # install_neutron() - Collect source and prepare
 function install_neutron {
     git_clone $NEUTRON_REPO $NEUTRON_DIR $NEUTRON_BRANCH
+    # BOB: Added for devstack runs as part of CI for code not yet upstream
+    if [[ "$CISCO_PATCH_NEUTRON" == "True" ]]; then
+        echo -n "Patching Neutron with patch under review ... "
+        result=$(patch_neutron_with_patch_under_review "$PATCH_REPO" "$BRANCH_NAME_PREFIX" "$SEPARATOR" "$NEUTRON_DIR")
+        echo $result
+        if [[ "$result" == "Failed!" ]]; then
+           die $LINENO "Aborting since Neutron could not by updated with needed code"
+        fi
+    fi
+    # BOB: End of - Added for devstack runs as part of CI for code not yet upstream
     setup_develop $NEUTRON_DIR
 }
 
