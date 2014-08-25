@@ -20,7 +20,7 @@ function configure_ciscocfgagent {
     mkdir -p $CISCO_CFGAGENT_CONFIG_DIR
     Q_CISCO_CFGAGENT_CONF_FILE=$CISCO_CFGAGENT_CONFIG_DIR/cisco_cfg_agent.ini
 
-    if [[ -f $NEUTRON_DIR/etc/neutron/plugins/cisco/cisco_cfg_agent.ini ]];
+    if [[ -f $NEUTRON_DIR/etc/neutron/plugins/cisco/cisco_cfg_agent.ini ]]; then
         cp $NEUTRON_DIR/etc/neutron/plugins/cisco/cisco_cfg_agent.ini $Q_CISCO_CFGAGENT_CONF_FILE
     else
         touch $Q_CISCO_CFGAGENT_CONF_FILE
