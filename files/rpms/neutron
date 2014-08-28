@@ -4,6 +4,8 @@ dnsmasq-utils # for dhcp_release
 ebtables
 iptables
 iputils
+mysql-connector-python
+mysql-devel  # testonly
 mysql-server # NOPRIME
 openvswitch # NOPRIME
 python-boto

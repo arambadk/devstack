@@ -20,20 +20,24 @@
 #   - pre-install hgtools to work around a bug in RHEL6 distribute
 #   - install nose 1.1 from EPEL
 
-set -o errexit
-set -o xtrace
+# If TOP_DIR is set we're being sourced rather than running stand-alone
+# or in a sub-shell
+if [[ -z "$TOP_DIR" ]]; then
+    set -o errexit
+    set -o xtrace
 
-# Keep track of the current directory
-TOOLS_DIR=$(cd $(dirname "$0") && pwd)
-TOP_DIR=$(cd $TOOLS_DIR/..; pwd)
+    # Keep track of the current directory
+    TOOLS_DIR=$(cd $(dirname "$0") && pwd)
+    TOP_DIR=$(cd $TOOLS_DIR/..; pwd)
 
-# Change dir to top of devstack
-cd $TOP_DIR
+    # Change dir to top of devstack
+    cd $TOP_DIR
 
-# Import common functions
-source $TOP_DIR/functions
+    # Import common functions
+    source $TOP_DIR/functions
 
-FILES=$TOP_DIR/files
+    FILES=$TOP_DIR/files
+fi
 
 # Keystone Port Reservation
 # -------------------------
@@ -99,6 +103,21 @@ if is_fedora; then
     if selinuxenabled; then
         sudo setenforce 0
     fi
+
+    FORCE_FIREWALLD=$(trueorfalse False $FORCE_FIREWALLD)
+    if [[ ${DISTRO} =~ (f19|f20) && $FORCE_FIREWALLD == "False" ]]; then
+        # On Fedora 19 and 20 firewalld interacts badly with libvirt and
+        # slows things down significantly.  However, for those cases
+        # where that combination is desired, allow this fix to be skipped.
+
+        # There was also an additional issue with firewalld hanging
+        # after install of libvirt with polkit.  See
+        # https://bugzilla.redhat.com/show_bug.cgi?id=1099031
+        if is_package_installed firewalld; then
+            uninstall_package firewalld
+        fi
+    fi
+
 fi
 
 # RHEL6

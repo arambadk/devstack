@@ -59,10 +59,6 @@ fi
 # Set the paths of certain binaries
 NOVA_ROOTWRAP=$(get_rootwrap_location nova)
 
-# Allow rate limiting to be turned off for testing, like for Tempest
-# NOTE: Set API_RATE_LIMIT="False" to turn OFF rate limiting
-API_RATE_LIMIT=${API_RATE_LIMIT:-"True"}
-
 # Option to enable/disable config drive
 # NOTE: Set FORCE_CONFIG_DRIVE="False" to turn OFF config drive
 FORCE_CONFIG_DRIVE=${FORCE_CONFIG_DRIVE:-"always"}
@@ -87,6 +83,10 @@ GUEST_INTERFACE_DEFAULT=$(ip link \
     | sed 's/://' \
     | grep ^[ep] \
     | head -1)
+
+# $NOVA_VNC_ENABLED can be used to forcibly enable vnc configuration.
+# In multi-node setups allows compute hosts to not run n-novnc.
+NOVA_VNC_ENABLED=$(trueorfalse False $NOVA_VNC_ENABLED)
 
 # Get hypervisor configuration
 # ----------------------------
@@ -461,9 +461,6 @@ function create_nova_conf {
     if [ "$SYSLOG" != "False" ]; then
         iniset $NOVA_CONF DEFAULT use_syslog "True"
     fi
-    if [ "$API_RATE_LIMIT" != "True" ]; then
-        iniset $NOVA_CONF DEFAULT api_rate_limit "False"
-    fi
     if [ "$FORCE_CONFIG_DRIVE" != "False" ]; then
         iniset $NOVA_CONF DEFAULT force_config_drive "$FORCE_CONFIG_DRIVE"
     fi
@@ -492,7 +489,7 @@ function create_nova_conf {
         iniset $NOVA_CONF spice html5proxy_base_url "$SPICEHTML5PROXY_URL"
     fi
 
-    if is_service_enabled n-novnc || is_service_enabled n-xvnc; then
+    if is_service_enabled n-novnc || is_service_enabled n-xvnc || [ "$NOVA_VNC_ENABLED" != False ]; then
         # Address on which instance vncservers will listen on compute hosts.
         # For multi-host, this should be the management ip of the compute host.
         VNCSERVER_LISTEN=${VNCSERVER_LISTEN=127.0.0.1}
