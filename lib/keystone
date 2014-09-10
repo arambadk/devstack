@@ -123,6 +123,13 @@ function _config_keystone_apache_wsgi {
     sudo mkdir -p $KEYSTONE_WSGI_DIR
 
     local keystone_apache_conf=$(apache_site_config_for keystone)
+    local apache_version=$(get_apache_version)
+
+    if [[ ${apache_version#*\.} -ge 4 ]]; then
+        # Apache 2.4 supports custom error log formats
+        # this should mirror the original log formatting.
+        local errorlogformat='ErrorLogFormat "%{cu}t %M"'
+    fi
 
     # copy proxy vhost and wsgi file
     sudo cp $KEYSTONE_DIR/httpd/keystone.py $KEYSTONE_WSGI_DIR/main
@@ -136,6 +143,7 @@ function _config_keystone_apache_wsgi {
         s|%PUBLICWSGI%|$KEYSTONE_WSGI_DIR/main|g;
         s|%ADMINWSGI%|$KEYSTONE_WSGI_DIR/admin|g;
         s|%USER%|$STACK_USER|g
+        s|%ERRORLOGFORMAT%|$errorlogformat|g;
     " -i $keystone_apache_conf
     enable_apache_site keystone
 }
@@ -229,11 +237,11 @@ function configure_keystone {
     iniset $KEYSTONE_CONF ec2 driver "keystone.contrib.ec2.backends.sql.Ec2"
 
     if [[ "$KEYSTONE_TOKEN_BACKEND" = "sql" ]]; then
-        iniset $KEYSTONE_CONF token driver keystone.token.backends.sql.Token
+        iniset $KEYSTONE_CONF token driver keystone.token.persistence.backends.sql.Token
     elif [[ "$KEYSTONE_TOKEN_BACKEND" = "memcache" ]]; then
-        iniset $KEYSTONE_CONF token driver keystone.token.backends.memcache.Token
+        iniset $KEYSTONE_CONF token driver keystone.token.persistence.backends.memcache.Token
     else
-        iniset $KEYSTONE_CONF token driver keystone.token.backends.kvs.Token
+        iniset $KEYSTONE_CONF token driver keystone.token.persistence.backends.kvs.Token
     fi
 
     if [[ "$KEYSTONE_CATALOG_BACKEND" = "sql" ]]; then
@@ -349,9 +357,8 @@ function create_keystone_accounts {
     # The Member role is used by Horizon and Swift so we need to keep it:
     local member_role=$(get_or_create_role "Member")
 
-    # ANOTHER_ROLE demonstrates that an arbitrary role may be created and used
+    # another_role demonstrates that an arbitrary role may be created and used
     # TODO(sleepsonthefloor): show how this can be used for rbac in the future!
-
     local another_role=$(get_or_create_role "anotherrole")
 
     # invisible tenant - admin can't see this one
@@ -468,6 +475,7 @@ function start_keystone {
     if [ "$KEYSTONE_USE_MOD_WSGI" == "True" ]; then
         restart_apache_server
         screen_it key "cd $KEYSTONE_DIR && sudo tail -f /var/log/$APACHE_NAME/keystone.log"
+        screen_it key-access "sudo tail -f /var/log/$APACHE_NAME/keystone_access.log"
     else
         # Start Keystone in a screen window
         screen_it key "cd $KEYSTONE_DIR && $KEYSTONE_DIR/bin/keystone-all --config-file $KEYSTONE_CONF --debug"

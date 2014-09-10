@@ -69,17 +69,8 @@ if [[ $EUID -eq 0 ]]; then
     echo "You are running this script as root."
     echo "Cut it out."
     echo "Really."
-    echo "If you need an account to run DevStack, do this (as root, heh) to create $STACK_USER:"
+    echo "If you need an account to run DevStack, do this (as root, heh) to create a non-root account:"
     echo "$TOP_DIR/tools/create-stack-user.sh"
-    exit 1
-fi
-
-# Check to see if we are already running DevStack
-# Note that this may fail if USE_SCREEN=False
-if type -p screen >/dev/null && screen -ls | egrep -q "[0-9].$SCREEN_NAME"; then
-    echo "You are already running a stack.sh session."
-    echo "To rejoin this session type 'screen -x stack'."
-    echo "To destroy this session, type './unstack.sh'."
     exit 1
 fi
 
@@ -130,6 +121,7 @@ if [[ -r $TOP_DIR/local.conf ]]; then
     done
 fi
 
+
 # ``stack.sh`` is customizable by setting environment variables.  Override a
 # default setting via export::
 #
@@ -157,6 +149,15 @@ if [[ ! -r $TOP_DIR/stackrc ]]; then
     die $LINENO "missing $TOP_DIR/stackrc - did you grab more than just stack.sh?"
 fi
 source $TOP_DIR/stackrc
+
+# Check to see if we are already running DevStack
+# Note that this may fail if USE_SCREEN=False
+if type -p screen > /dev/null && screen -ls | egrep -q "[0-9]\.$SCREEN_NAME"; then
+    echo "You are already running a stack.sh session."
+    echo "To rejoin this session type 'screen -x stack'."
+    echo "To destroy this session, type './unstack.sh'."
+    exit 1
+fi
 
 
 # Local Settings
@@ -236,7 +237,7 @@ fi
 if [[ is_fedora && ( $DISTRO == "rhel6" || $DISTRO == "rhel7" ) ]]; then
     # RHEL requires EPEL for many Open Stack dependencies
     if [[ $DISTRO == "rhel7" ]]; then
-        EPEL_RPM=${RHEL7_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-0.2.noarch.rpm"}
+        EPEL_RPM=${RHEL7_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-1.noarch.rpm"}
     elif [[ $DISTRO == "rhel6" ]]; then
         EPEL_RPM=${RHEL6_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"}
     fi
@@ -323,9 +324,6 @@ SYSLOG=`trueorfalse False $SYSLOG`
 SYSLOG_HOST=${SYSLOG_HOST:-$HOST_IP}
 SYSLOG_PORT=${SYSLOG_PORT:-516}
 
-# for DSTAT logging
-DSTAT_FILE=${DSTAT_FILE:-"dstat.txt"}
-
 # Use color for logging output (only available if syslog is not used)
 LOG_COLOR=`trueorfalse True $LOG_COLOR`
 
@@ -369,6 +367,7 @@ source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/neutron
 source $TOP_DIR/lib/baremetal
 source $TOP_DIR/lib/ldap
+source $TOP_DIR/lib/dstat
 
 # Extras Source
 # --------------
@@ -426,7 +425,7 @@ function read_password {
             echo "Invalid chars in password.  Try again:"
         done
         if [ ! $pw ]; then
-            pw=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 20)
+            pw=$(generate_hex_string 10)
         fi
         eval "$var=$pw"
         echo "$var=$pw" >> $localrc
@@ -949,12 +948,7 @@ init_service_check
 # -------
 
 # A better kind of sysstat, with the top process per time slice
-DSTAT_OPTS="-tcmndrylp --top-cpu-adv"
-if [[ -n ${SCREEN_LOGDIR} ]]; then
-    screen_it dstat "cd $TOP_DIR; dstat $DSTAT_OPTS | tee $SCREEN_LOGDIR/$DSTAT_FILE"
-else
-    screen_it dstat "dstat $DSTAT_OPTS"
-fi
+start_dstat
 
 # Start Services
 # ==============
@@ -1212,11 +1206,7 @@ fi
 
 # Create a randomized default value for the keymgr's fixed_key
 if is_service_enabled nova; then
-    FIXED_KEY=""
-    for i in $(seq 1 64); do
-        FIXED_KEY+=$(echo "obase=16; $(($RANDOM % 16))" | bc);
-    done;
-    iniset $NOVA_CONF keymgr fixed_key "$FIXED_KEY"
+    iniset $NOVA_CONF keymgr fixed_key $(generate_hex_string 32)
 fi
 
 if is_service_enabled zeromq; then
@@ -1425,51 +1415,55 @@ if [[ -n "$DEPRECATED_TEXT" ]]; then
     echo_summary "WARNING: $DEPRECATED_TEXT"
 fi
 
-# TODO(dtroyer): Remove Q_AGENT_EXTRA_AGENT_OPTS after stable/juno branch is cut
-if [[ -n "$Q_AGENT_EXTRA_AGENT_OPTS" ]]; then
-    echo ""
-    echo_summary "WARNING: Q_AGENT_EXTRA_AGENT_OPTS is used"
-    echo "You are using Q_AGENT_EXTRA_AGENT_OPTS to pass configuration into $NEUTRON_CONF."
-    echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
-    echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
-    echo "
+if is_service_enabled neutron; then
+    # TODO(dtroyer): Remove Q_AGENT_EXTRA_AGENT_OPTS after stable/juno branch is cut
+    if [[ -n "$Q_AGENT_EXTRA_AGENT_OPTS" ]]; then
+        echo ""
+        echo_summary "WARNING: Q_AGENT_EXTRA_AGENT_OPTS is used"
+        echo "You are using Q_AGENT_EXTRA_AGENT_OPTS to pass configuration into $NEUTRON_CONF."
+        echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
+        echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
+        echo "
 [[post-config|/\$Q_PLUGIN_CONF_FILE]]
 [DEFAULT]
 "
-    for I in "${Q_AGENT_EXTRA_AGENT_OPTS[@]}"; do
-        # Replace the first '=' with ' ' for iniset syntax
-        echo ${I}
-    done
-fi
+        for I in "${Q_AGENT_EXTRA_AGENT_OPTS[@]}"; do
+            # Replace the first '=' with ' ' for iniset syntax
+            echo ${I}
+        done
+    fi
 
-# TODO(dtroyer): Remove Q_AGENT_EXTRA_SRV_OPTS after stable/juno branch is cut
-if [[ -n "$Q_AGENT_EXTRA_SRV_OPTS" ]]; then
-    echo ""
-    echo_summary "WARNING: Q_AGENT_EXTRA_SRV_OPTS is used"
-    echo "You are using Q_AGENT_EXTRA_SRV_OPTS to pass configuration into $NEUTRON_CONF."
-    echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
-    echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
-    echo "
+    # TODO(dtroyer): Remove Q_AGENT_EXTRA_SRV_OPTS after stable/juno branch is cut
+    if [[ -n "$Q_AGENT_EXTRA_SRV_OPTS" ]]; then
+        echo ""
+        echo_summary "WARNING: Q_AGENT_EXTRA_SRV_OPTS is used"
+        echo "You are using Q_AGENT_EXTRA_SRV_OPTS to pass configuration into $NEUTRON_CONF."
+        echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
+        echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
+        echo "
 [[post-config|/\$Q_PLUGIN_CONF_FILE]]
 [DEFAULT]
 "
-    for I in "${Q_AGENT_EXTRA_SRV_OPTS[@]}"; do
-        # Replace the first '=' with ' ' for iniset syntax
-        echo ${I}
-    done
+        for I in "${Q_AGENT_EXTRA_SRV_OPTS[@]}"; do
+            # Replace the first '=' with ' ' for iniset syntax
+            echo ${I}
+        done
+    fi
 fi
 
-# TODO(dtroyer): Remove CINDER_MULTI_LVM_BACKEND after stable/juno branch is cut
-if [[ "$CINDER_MULTI_LVM_BACKEND" = "True" ]]; then
-    echo ""
-    echo_summary "WARNING: CINDER_MULTI_LVM_BACKEND is used"
-    echo "You are using CINDER_MULTI_LVM_BACKEND to configure Cinder's multiple LVM backends"
-    echo "Please convert that configuration in local.conf to use CINDER_ENABLED_BACKENDS."
-    echo "CINDER_ENABLED_BACKENDS will be removed early in the 'K' development cycle"
-    echo "
+if is_service_enabled cinder; then
+    # TODO(dtroyer): Remove CINDER_MULTI_LVM_BACKEND after stable/juno branch is cut
+    if [[ "$CINDER_MULTI_LVM_BACKEND" = "True" ]]; then
+        echo ""
+        echo_summary "WARNING: CINDER_MULTI_LVM_BACKEND is used"
+        echo "You are using CINDER_MULTI_LVM_BACKEND to configure Cinder's multiple LVM backends"
+        echo "Please convert that configuration in local.conf to use CINDER_ENABLED_BACKENDS."
+        echo "CINDER_ENABLED_BACKENDS will be removed early in the 'K' development cycle"
+        echo "
 [[local|localrc]]
 CINDER_ENABLED_BACKENDS=lvm:lvmdriver-1,lvm:lvmdriver-2
 "
+    fi
 fi
 
 # Indicate how long this took to run (bash maintained variable ``SECONDS``)

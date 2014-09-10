@@ -172,9 +172,11 @@ HORIZON_BRANCH=${HORIZON_BRANCH:-master}
 HORIZONAUTH_REPO=${HORIZONAUTH_REPO:-${GIT_BASE}/openstack/django_openstack_auth.git}
 HORIZONAUTH_BRANCH=${HORIZONAUTH_BRANCH:-master}
 
-# baremetal provisionint service
+# baremetal provisioning service
 IRONIC_REPO=${IRONIC_REPO:-${GIT_BASE}/openstack/ironic.git}
 IRONIC_BRANCH=${IRONIC_BRANCH:-master}
+IRONIC_PYTHON_AGENT_REPO=${IRONIC_PYTHON_AGENT_REPO:-${GIT_BASE}/openstack/ironic-python-agent.git}
+IRONIC_PYTHON_AGENT_BRANCH=${IRONIC_PYTHON_AGENT_BRANCH:-master}
 
 # ironic client
 IRONICCLIENT_REPO=${IRONICCLIENT_REPO:-${GIT_BASE}/openstack/python-ironicclient.git}
@@ -220,6 +222,10 @@ ORC_BRANCH=${ORC_BRANCH:-master}
 CLIFF_REPO=${CLIFF_REPO:-${GIT_BASE}/openstack/cliff.git}
 CLIFF_BRANCH=${CLIFF_BRANCH:-master}
 
+# oslo.concurrency
+OSLOCON_REPO=${OSLOCON_REPO:-${GIT_BASE}/openstack/oslo.concurrency.git}
+OSLOCON_BRANCH=${OSLOCON_BRANCH:-master}
+
 # oslo.config
 OSLOCFG_REPO=${OSLOCFG_REPO:-${GIT_BASE}/openstack/oslo.config.git}
 OSLOCFG_BRANCH=${OSLOCFG_BRANCH:-master}
@@ -232,13 +238,29 @@ OSLODB_BRANCH=${OSLODB_BRANCH:-master}
 OSLOI18N_REPO=${OSLOI18N_REPO:-${GIT_BASE}/openstack/oslo.i18n.git}
 OSLOI18N_BRANCH=${OSLOI18N_BRANCH:-master}
 
+# oslo.log
+OSLOLOG_REPO=${OSLOLOG_REPO:-${GIT_BASE}/openstack/oslo.log.git}
+OSLOLOG_BRANCH=${OSLOLOG_BRANCH:-master}
+
 # oslo.messaging
 OSLOMSG_REPO=${OSLOMSG_REPO:-${GIT_BASE}/openstack/oslo.messaging.git}
 OSLOMSG_BRANCH=${OSLOMSG_BRANCH:-master}
 
+# oslo.middleware
+OSLOMID_REPO=${OSLOMID_REPO:-${GIT_BASE}/openstack/oslo.middleware.git}
+OSLOMID_BRANCH=${OSLOMID_BRANCH:-master}
+
 # oslo.rootwrap
 OSLORWRAP_REPO=${OSLORWRAP_REPO:-${GIT_BASE}/openstack/oslo.rootwrap.git}
 OSLORWRAP_BRANCH=${OSLORWRAP_BRANCH:-master}
+
+# oslo.serialization
+OSLOSERIALIZATION_REPO=${OSLOSERIALIZATION_REPO:-${GIT_BASE}/openstack/oslo.serialization.git}
+OSLOSERIALIZATION_BRANCH=${OSLOSERIALIZATION_BRANCH:-master}
+
+# oslo.utils
+OSLOUTILS_REPO=${OSLOUTILS_REPO:-${GIT_BASE}/openstack/oslo.utils.git}
+OSLOUTILS_BRANCH=${OSLOUTILS_BRANCH:-master}
 
 # oslo.vmware
 OSLOVMWARE_REPO=${OSLOVMWARE_REPO:-${GIT_BASE}/openstack/oslo.vmware.git}
