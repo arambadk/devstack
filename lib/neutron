@@ -86,7 +86,7 @@ NEUTRON_CONF=$NEUTRON_CONF_DIR/neutron.conf
 export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/debug.ini"}
 
 # BOB: Added for devstack runs as part of CI for code not yet upstream
-Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR=${Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR:-$NEUTRON_DIR/neutron/plugins/cisco/l3/setup/}
+Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR=${Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR:-$TOP_DIR/lib/neutron_plugins/services/csr1kv_l3_setup/}
 Q_CISCO_PATCH_NEUTRON=$(trueorfalse False $Q_CISCO_PATCH_NEUTRON)
 source $TOP_DIR/lib/cisco_patching_functions
 # BOB: Added for devstack runs as part of CI for code not yet upstream
@@ -108,7 +108,7 @@ Q_META_CONF_FILE=$NEUTRON_CONF_DIR/metadata_agent.ini
 # Default name for Neutron database
 Q_DB_NAME=${Q_DB_NAME:-neutron}
 # Default Neutron Plugin
-Q_PLUGIN=${Q_PLUGIN:-csr1kv_openvswitch}
+Q_PLUGIN=${Q_PLUGIN:-cisco}
 # Default Neutron Port
 Q_PORT=${Q_PORT:-9696}
 # Default Neutron Host
