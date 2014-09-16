@@ -149,7 +149,7 @@ EOF
 }
 
 function install_ciscoconfparse {
-    sudo pip install ciscoconfparse
+    sudo -e pip install ciscoconfparse
 }
 
 function is_ciscoconfparse_installed {
@@ -398,6 +398,19 @@ function neutron_plugin_configure_l3_agent {
 function _configure_cisco_router_plugin {
     if ! is_ciscoconfparse_installed; then
         install_ciscoconfparse
+    fi
+    # Install a known compatible ncclient from the Cisco repository if necessary
+    if ! is_ncclient_installed; then
+        # Preserve the two global variables
+        local offline=$OFFLINE
+        local reclone=$RECLONE
+        # Change their values to allow installation
+        OFFLINE=False
+        RECLONE=yes
+        install_ncclient
+        # Restore their values
+        OFFLINE=$offline
+        RECLONE=$reclone
     fi
 }
 

@@ -36,7 +36,7 @@ function get_port_profile_id() {
     while [ $c -le 5 ] && [ "$pProfileId" == "None" ]; do
         pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="No"; } /'"$name"'/ { res=$2; } END { print res;}'`
         let c+=1
-        sleep 1
+        sleep 5
     done
 }
 
