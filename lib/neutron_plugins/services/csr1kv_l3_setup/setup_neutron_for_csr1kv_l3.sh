@@ -110,11 +110,11 @@ function _configure_vsm_port_profiles() {
 
 
 function get_network_profile_id() {
-    name=$1
-    phyNet=$2
-    type=$3
-    subType=$4
-    segRange=$5
+    local name=$1
+    local phyNet=$2
+    local type=$3
+    local subType=$4
+    local segRange=$5
     local c=0
     local opt_param=
 
@@ -129,7 +129,7 @@ function get_network_profile_id() {
         fi
         $osn cisco-network-profile-create --tenant-id $tenantId --physical_network $phyNet $opt_param $name $type
     fi
-    while [ $c -le 5 ] && [ "$nProfileId" == "None" ]; do
+    while [ $c -le 15 ] && [ "$nProfileId" == "None" ]; do
         nProfileId=`$osn cisco-network-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
         let c+=1
         sleep 5
@@ -138,19 +138,19 @@ function get_network_profile_id() {
 
 
 function get_port_profile_id() {
-    name=$1
-    porttype=$2
+    local name=$1
+    local porttype=$2
     local c=0
     pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
     if [ "$pProfileId" == "None" ]; then
         echo "   Port policy profile $name does not exist. Creating it."
         _configure_vsm_port_profiles $vsmIP $vsmUsername $vsmPassword $name $porttype
     fi
-    if [ ${n1kvPortPolicyProfileNames[$i]} == "sys-uplink" ]; then
-        # The n1kv plugin does not list the above policies so we cannot check them
-        continue
+    if [ "${n1kvPortPolicyProfileNames[$i]}" == "sys-uplink" ]; then
+        # The n1kv plugin does not list the above policies so we cannot verify them
+        return
     fi
-    while [ $c -le 5 ] && [ "$pProfileId" == "None" ]; do
+    while [ $c -le 15 ] && [ "$pProfileId" == "None" ]; do
         pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
         let c+=1
         sleep 5
@@ -205,11 +205,7 @@ if [ "$plugin" == "n1kv" ]; then
     for (( i=0; i<${#n1kvPortPolicyProfileNames[@]}; i++ )); do
         echo "   Checking ${n1kvPortPolicyProfileNames[$i]} ..."
         get_port_profile_id ${n1kvPortPolicyProfileNames[$i]} ${n1kvPortPolicyProfileTypes[$i]}
-        if [ ${n1kvPortPolicyProfileNames[$i]} == "sys-uplink" ]; then
-            # The n1kv plugin does not list the above policies so we cannot check them
-            continue
-        fi
-        if [ $pProfileId == "None" ]; then
+        if [ $pProfileId == "None" ] && [ "${n1kvPortPolicyProfileNames[$i]}" != "sys-uplink" ]; then
             echo "   Failed to verify port profile ${n1kvPortPolicyProfileNames[$i]}, please check health of the VSM then re-run this script."
             echo "   Aborting!"
             exit 1

@@ -22,7 +22,7 @@ function get_port_profile_id() {
     name=$1
     local c=0
     pProfileId=None
-    while [ $c -le 5 ] && [ "$pProfileId" == "None" ]; do
+    while [ $c -le 15 ] && [ "$pProfileId" == "None" ]; do
         pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
         if [[ "$pProfileId" == "None" ]]; then
             let c+=1
