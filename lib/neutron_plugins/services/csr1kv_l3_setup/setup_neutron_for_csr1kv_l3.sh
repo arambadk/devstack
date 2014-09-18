@@ -146,6 +146,10 @@ function get_port_profile_id() {
         echo "   Port policy profile $name does not exist. Creating it."
         _configure_vsm_port_profiles $vsmIP $vsmUsername $vsmPassword $name $porttype
     fi
+    if [ ${n1kvPortPolicyProfileNames[$i]} == "sys-uplink" ]; then
+        # The n1kv plugin does not list the above policies so we cannot check them
+        continue
+    fi
     while [ $c -le 5 ] && [ "$pProfileId" == "None" ]; do
         pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
         let c+=1
@@ -199,12 +203,12 @@ if [ "$plugin" == "n1kv" ]; then
 
     echo "Verifying that required N1kv port policy profiles exist:"
     for (( i=0; i<${#n1kvPortPolicyProfileNames[@]}; i++ )); do
+        echo "   Checking ${n1kvPortPolicyProfileNames[$i]} ..."
+        get_port_profile_id ${n1kvPortPolicyProfileNames[$i]} ${n1kvPortPolicyProfileTypes[$i]}
         if [ ${n1kvPortPolicyProfileNames[$i]} == "sys-uplink" ]; then
             # The n1kv plugin does not list the above policies so we cannot check them
             continue
         fi
-        echo "   Checking ${n1kvPortPolicyProfileNames[$i]} ..."
-        get_port_profile_id ${n1kvPortPolicyProfileNames[$i]} ${n1kvPortPolicyProfileTypes[$i]}
         if [ $pProfileId == "None" ]; then
             echo "   Failed to verify port profile ${n1kvPortPolicyProfileNames[$i]}, please check health of the VSM then re-run this script."
             echo "   Aborting!"
