@@ -30,13 +30,15 @@ fi
 
 
 function get_port_profile_id() {
-    name=$1
+    local name=$1
     local c=0
-    pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
+    pProfileId=None
     while [ $c -le 5 ] && [ "$pProfileId" == "None" ]; do
-        pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="No"; } /'"$name"'/ { res=$2; } END { print res;}'`
-        let c+=1
-        sleep 5
+        pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
+        if [[ "$pProfileId" == "None" ]]; then
+            let c+=1
+            sleep 5
+        fi
     done
 }
 

@@ -132,6 +132,7 @@ function get_network_profile_id() {
     while [ $c -le 5 ] && [ "$nProfileId" == "None" ]; do
         nProfileId=`$osn cisco-network-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
         let c+=1
+        sleep 5
     done
 }
 
@@ -146,9 +147,9 @@ function get_port_profile_id() {
         _configure_vsm_port_profiles $vsmIP $vsmUsername $vsmPassword $name $porttype
     fi
     while [ $c -le 5 ] && [ "$pProfileId" == "None" ]; do
-        pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="No"; } /'"$name"'/ { res=$2; } END { print res;}'`
+        pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
         let c+=1
-        sleep 1
+        sleep 5
     done
 }
 
