@@ -199,6 +199,10 @@ if [ "$plugin" == "n1kv" ]; then
 
     echo "Verifying that required N1kv port policy profiles exist:"
     for (( i=0; i<${#n1kvPortPolicyProfileNames[@]}; i++ )); do
+        if [ ${n1kvPortPolicyProfileNames[$i]} == "sys-uplink" ]; then
+            # The n1kv plugin does not list the above policies so we cannot check them
+            continue
+        fi
         echo "   Checking ${n1kvPortPolicyProfileNames[$i]} ..."
         get_port_profile_id ${n1kvPortPolicyProfileNames[$i]} ${n1kvPortPolicyProfileTypes[$i]}
         if [ $pProfileId == "None" ]; then
