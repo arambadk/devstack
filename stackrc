@@ -144,6 +144,9 @@ DIB_BRANCH=${DIB_BRANCH:-master}
 GLANCE_REPO=${GLANCE_REPO:-${GIT_BASE}/openstack/glance.git}
 GLANCE_BRANCH=${GLANCE_BRANCH:-master}
 
+GLANCE_STORE_REPO=${GLANCE_STORE_REPO:-${GIT_BASE}/openstack/glance_store.git}
+GLANCE_STORE_BRANCH=${GLANCE_STORE_BRANCH:-master}
+
 # python glance client library
 GLANCECLIENT_REPO=${GLANCECLIENT_REPO:-${GIT_BASE}/openstack/python-glanceclient.git}
 GLANCECLIENT_BRANCH=${GLANCECLIENT_BRANCH:-master}
@@ -504,6 +507,11 @@ UNDO_REQUIREMENTS=${UNDO_REQUIREMENTS:-True}
 
 # Allow the use of an alternate protocol (such as https) for service endpoints
 SERVICE_PROTOCOL=${SERVICE_PROTOCOL:-http}
+
+# Sets the maximum number of workers for various services and can restrict
+# the memory used where there are a large number of CPUs present
+# (the default number of workers for many services is the number of CPUs)
+# API_WORKERS=4
 
 # Local variables:
 # mode: shell-script

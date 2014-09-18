@@ -28,6 +28,7 @@ set +o xtrace
 
 # Set up default directories
 GLANCE_DIR=$DEST/glance
+GLANCE_STORE_DIR=$DEST/glance_store
 GLANCECLIENT_DIR=$DEST/python-glanceclient
 GLANCE_CACHE_DIR=${GLANCE_CACHE_DIR:=$DATA_DIR/glance/cache}
 GLANCE_IMAGE_DIR=${GLANCE_IMAGE_DIR:=$DATA_DIR/glance/images}
@@ -136,6 +137,10 @@ function configure_glance {
     # NOTE(flaper87): Until Glance is fully migrated, set these configs in both
     # sections.
     iniset $GLANCE_API_CONF glance_store filesystem_store_datadir $GLANCE_IMAGE_DIR/
+
+    if [ -n "$API_WORKERS" ]; then
+        iniset $GLANCE_API_CONF DEFAULT workers "$API_WORKERS"
+    fi
 
     # Store the images in swift if enabled.
     if is_service_enabled s-proxy; then
@@ -263,14 +268,19 @@ function install_glanceclient {
 
 # install_glance() - Collect source and prepare
 function install_glance {
+    # Install glance_store from git so we make sure we're testing
+    # the latest code.
+    git_clone $GLANCE_STORE_REPO $GLANCE_STORE_DIR $GLANCE_STORE_BRANCH
+    setup_develop $GLANCE_STORE_DIR
+
     git_clone $GLANCE_REPO $GLANCE_DIR $GLANCE_BRANCH
     setup_develop $GLANCE_DIR
 }
 
 # start_glance() - Start running processes, including screen
 function start_glance {
-    screen_it g-reg "cd $GLANCE_DIR; $GLANCE_BIN_DIR/glance-registry --config-file=$GLANCE_CONF_DIR/glance-registry.conf"
-    screen_it g-api "cd $GLANCE_DIR; $GLANCE_BIN_DIR/glance-api --config-file=$GLANCE_CONF_DIR/glance-api.conf"
+    run_process g-reg "$GLANCE_BIN_DIR/glance-registry --config-file=$GLANCE_CONF_DIR/glance-registry.conf"
+    run_process g-api "$GLANCE_BIN_DIR/glance-api --config-file=$GLANCE_CONF_DIR/glance-api.conf"
     echo "Waiting for g-api ($GLANCE_HOSTPORT) to start..."
     if ! timeout $SERVICE_TIMEOUT sh -c "while ! wget --no-proxy -q -O- http://$GLANCE_HOSTPORT; do sleep 1; done"; then
         die $LINENO "g-api did not start"
@@ -280,8 +290,8 @@ function start_glance {
 # stop_glance() - Stop running processes
 function stop_glance {
     # Kill the Glance screen windows
-    screen_stop g-api
-    screen_stop g-reg
+    stop_process g-api
+    stop_process g-reg
 }
 
 

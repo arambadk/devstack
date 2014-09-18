@@ -37,7 +37,6 @@ umask 022
 # Keep track of the devstack directory
 TOP_DIR=$(cd $(dirname "$0") && pwd)
 
-
 # Sanity Checks
 # -------------
 
@@ -73,7 +72,6 @@ if [[ $EUID -eq 0 ]]; then
     echo "$TOP_DIR/tools/create-stack-user.sh"
     exit 1
 fi
-
 
 # Prepare the environment
 # -----------------------
@@ -640,9 +638,9 @@ function exit_trap {
     if [[ $r -ne 0 ]]; then
         echo "Error on exit"
         if [[ -z $LOGDIR ]]; then
-            ./tools/worlddump.py
+            $TOP_DIR/tools/worlddump.py
         else
-            ./tools/worlddump.py -d $LOGDIR
+            $TOP_DIR/tools/worlddump.py -d $LOGDIR
         fi
     fi
 
@@ -1211,7 +1209,7 @@ fi
 
 if is_service_enabled zeromq; then
     echo_summary "Starting zermomq receiver"
-    screen_it zeromq "cd $NOVA_DIR && $OSLO_BIN_DIR/oslo-messaging-zmq-receiver"
+    run_process zeromq "$OSLO_BIN_DIR/oslo-messaging-zmq-receiver"
 fi
 
 # Launch the nova-api and wait for it to answer before continuing
@@ -1320,7 +1318,7 @@ if is_service_enabled nova && is_baremetal; then
     fi
     # ensure callback daemon is running
     sudo pkill nova-baremetal-deploy-helper || true
-    screen_it baremetal "cd ; nova-baremetal-deploy-helper"
+    run_process baremetal "nova-baremetal-deploy-helper"
 fi
 
 # Save some values we generated for later use
@@ -1458,7 +1456,7 @@ if is_service_enabled cinder; then
         echo_summary "WARNING: CINDER_MULTI_LVM_BACKEND is used"
         echo "You are using CINDER_MULTI_LVM_BACKEND to configure Cinder's multiple LVM backends"
         echo "Please convert that configuration in local.conf to use CINDER_ENABLED_BACKENDS."
-        echo "CINDER_ENABLED_BACKENDS will be removed early in the 'K' development cycle"
+        echo "CINDER_MULTI_LVM_BACKEND will be removed early in the 'K' development cycle"
         echo "
 [[local|localrc]]
 CINDER_ENABLED_BACKENDS=lvm:lvmdriver-1,lvm:lvmdriver-2

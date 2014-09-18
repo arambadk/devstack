@@ -24,7 +24,7 @@ vlan
 curl
 genisoimage # required for config_drive
 rabbitmq-server # NOPRIME
-qpidd # dist:precise NOPRIME
+qpidd # NOPRIME
 socat # used by ajaxterm
 python-mox
 python-paste
@@ -42,8 +42,7 @@ python-sqlalchemy
 python-suds
 python-lockfile
 python-m2crypto
-python-boto
 python-kombu
 python-feedparser
 python-iso8601
-python-qpid # dist:precise
+python-qpid # NOPRIME
