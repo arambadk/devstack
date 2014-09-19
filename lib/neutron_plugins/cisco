@@ -162,6 +162,9 @@ function is_ciscoconfparse_installed {
 # Install the ncclient package
 function install_ncclient {
     git_clone $NCCLIENT_REPO $NCCLIENT_DIR $NCCLIENT_BRANCH
+    if [ "$NCCLIENT_COMMIT_ID" != "" ]; then
+        (cd $NCCLIENT_DIR; git checkout $NCCLIENT_COMMIT_ID)
+    fi
     (cd $NCCLIENT_DIR; sudo python setup.py install)
 }
 
