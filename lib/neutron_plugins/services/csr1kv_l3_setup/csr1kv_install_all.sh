@@ -11,7 +11,7 @@ plugin=${2:-n1kv}
 localrc=$3
 mysql_user=$4
 mysql_password=$5
-
+mgmt_ip=$6
 
 # Adopted from Devstack scripts:
 # Normalize config values to True or False
@@ -46,7 +46,7 @@ echo "***************** Setting up Nova & Glance for CSR1kv *****************"
 echo "***************** Setting up Neutron for CSR1kv *****************"
 ./setup_neutron_for_csr1kv_l3.sh $osn $plugin $localrc
 echo "***************** Setting up CfgAgent connectivity *****************"
-./setup_l3cfgagent_networking.sh $osn $plugin
+./setup_l3cfgagent_networking.sh $osn $plugin $mgmt_ip
 if [[ "$CREATE_TEST_NETWORKS" == "True" ]]; then
     source ~/devstack/openrc admin demo
     echo "***************** Setting up test networks *****************"

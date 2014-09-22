@@ -14,7 +14,7 @@ l3AdminTenant=L3AdminTenant
 
 osnMgmtNwName=osn_mgmt_nw
 osnMgmtNwLen=24
-l3CfgAgentMgmtIP=10.0.100.2
+l3CfgAgentMgmtIP=${3:-10.0.100.2}
 portName=l3CfgAgent1
 n1kvPortPolicyProfileNames=(osn_mgmt_pp osn_t1_pp osn_t2_pp)
 vethHostSideName=l3cfgagent_hs
