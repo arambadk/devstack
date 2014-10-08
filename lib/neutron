@@ -506,7 +506,7 @@ function setup_for_csr1kv {
 	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
     echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
-    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
+    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
 }
 
 function create_neutron_initial_network {
@@ -917,6 +917,7 @@ function _configure_neutron_fwaas {
 function _configure_neutron_vpn {
     neutron_vpn_install_agent_packages
     neutron_vpn_configure_common
+    neutron_vpnaas_configure_driver
 }
 
 function _configure_dvr {
