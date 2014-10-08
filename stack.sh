@@ -34,6 +34,9 @@ export LC_ALL
 # Make sure umask is sane
 umask 022
 
+# Not all distros have sbin in PATH for regular users.
+PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin
+
 # Keep track of the devstack directory
 TOP_DIR=$(cd $(dirname "$0") && pwd)
 
@@ -177,9 +180,6 @@ if [[ ,${ENABLED_SERVICES}, =~ ,"swift", ]]; then
     exit 1
 fi
 
-# Set up logging level
-VERBOSE=$(trueorfalse True $VERBOSE)
-
 # Configure sudo
 # --------------
 
@@ -285,6 +285,182 @@ if [ -z "`grep ^127.0.0.1 /etc/hosts | grep $LOCAL_HOSTNAME`" ]; then
 fi
 
 
+# Configure Logging
+# -----------------
+
+# Set up logging level
+VERBOSE=$(trueorfalse True $VERBOSE)
+
+# Draw a spinner so the user knows something is happening
+function spinner {
+    local delay=0.75
+    local spinstr='/-\|'
+    printf "..." >&3
+    while [ true ]; do
+        local temp=${spinstr#?}
+        printf "[%c]" "$spinstr" >&3
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b" >&3
+    done
+}
+
+function kill_spinner {
+    if [ ! -z "$LAST_SPINNER_PID" ]; then
+        kill >/dev/null 2>&1 $LAST_SPINNER_PID
+        printf "\b\b\bdone\n" >&3
+    fi
+}
+
+# Echo text to the log file, summary log file and stdout
+# echo_summary "something to say"
+function echo_summary {
+    if [[ -t 3 && "$VERBOSE" != "True" ]]; then
+        kill_spinner
+        echo -n -e $@ >&6
+        spinner &
+        LAST_SPINNER_PID=$!
+    else
+        echo -e $@ >&6
+    fi
+}
+
+# Echo text only to stdout, no log files
+# echo_nolog "something not for the logs"
+function echo_nolog {
+    echo $@ >&3
+}
+
+if [[ is_fedora && $DISTRO == "rhel6" ]]; then
+    # poor old python2.6 doesn't have argparse by default, which
+    # outfilter.py uses
+    is_package_installed python-argparse || install_package python-argparse
+fi
+
+# Set up logging for ``stack.sh``
+# Set ``LOGFILE`` to turn on logging
+# Append '.xxxxxxxx' to the given name to maintain history
+# where 'xxxxxxxx' is a representation of the date the file was created
+TIMESTAMP_FORMAT=${TIMESTAMP_FORMAT:-"%F-%H%M%S"}
+if [[ -n "$LOGFILE" || -n "$SCREEN_LOGDIR" ]]; then
+    LOGDAYS=${LOGDAYS:-7}
+    CURRENT_LOG_TIME=$(date "+$TIMESTAMP_FORMAT")
+fi
+
+if [[ -n "$LOGFILE" ]]; then
+    # First clean up old log files.  Use the user-specified ``LOGFILE``
+    # as the template to search for, appending '.*' to match the date
+    # we added on earlier runs.
+    LOGDIR=$(dirname "$LOGFILE")
+    LOGFILENAME=$(basename "$LOGFILE")
+    mkdir -p $LOGDIR
+    find $LOGDIR -maxdepth 1 -name $LOGFILENAME.\* -mtime +$LOGDAYS -exec rm {} \;
+    LOGFILE=$LOGFILE.${CURRENT_LOG_TIME}
+    SUMFILE=$LOGFILE.${CURRENT_LOG_TIME}.summary
+
+    # Redirect output according to config
+
+    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
+    # stdout later.
+    exec 3>&1
+    if [[ "$VERBOSE" == "True" ]]; then
+        # Set fd 1 and 2 to write the log file
+        exec 1> >( $TOP_DIR/tools/outfilter.py -v -o "${LOGFILE}" ) 2>&1
+        # Set fd 6 to summary log file
+        exec 6> >( $TOP_DIR/tools/outfilter.py -o "${SUMFILE}" )
+    else
+        # Set fd 1 and 2 to primary logfile
+        exec 1> >( $TOP_DIR/tools/outfilter.py -o "${LOGFILE}" ) 2>&1
+        # Set fd 6 to summary logfile and stdout
+        exec 6> >( $TOP_DIR/tools/outfilter.py -v -o "${SUMFILE}" >&3 )
+    fi
+
+    echo_summary "stack.sh log $LOGFILE"
+    # Specified logfile name always links to the most recent log
+    ln -sf $LOGFILE $LOGDIR/$LOGFILENAME
+    ln -sf $SUMFILE $LOGDIR/$LOGFILENAME.summary
+else
+    # Set up output redirection without log files
+    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
+    # stdout later.
+    exec 3>&1
+    if [[ "$VERBOSE" != "True" ]]; then
+        # Throw away stdout and stderr
+        exec 1>/dev/null 2>&1
+    fi
+    # Always send summary fd to original stdout
+    exec 6> >( $TOP_DIR/tools/outfilter.py -v >&3 )
+fi
+
+# Set up logging of screen windows
+# Set ``SCREEN_LOGDIR`` to turn on logging of screen windows to the
+# directory specified in ``SCREEN_LOGDIR``, we will log to the the file
+# ``screen-$SERVICE_NAME-$TIMESTAMP.log`` in that dir and have a link
+# ``screen-$SERVICE_NAME.log`` to the latest log file.
+# Logs are kept for as long specified in ``LOGDAYS``.
+if [[ -n "$SCREEN_LOGDIR" ]]; then
+
+    # We make sure the directory is created.
+    if [[ -d "$SCREEN_LOGDIR" ]]; then
+        # We cleanup the old logs
+        find $SCREEN_LOGDIR -maxdepth 1 -name screen-\*.log -mtime +$LOGDAYS -exec rm {} \;
+    else
+        mkdir -p $SCREEN_LOGDIR
+    fi
+fi
+
+
+# Configure Error Traps
+# ---------------------
+
+# Kill background processes on exit
+trap exit_trap EXIT
+function exit_trap {
+    local r=$?
+    jobs=$(jobs -p)
+    # Only do the kill when we're logging through a process substitution,
+    # which currently is only to verbose logfile
+    if [[ -n $jobs && -n "$LOGFILE" && "$VERBOSE" == "True" ]]; then
+        echo "exit_trap: cleaning up child processes"
+        kill 2>&1 $jobs
+    fi
+
+    # Kill the last spinner process
+    kill_spinner
+
+    if [[ $r -ne 0 ]]; then
+        echo "Error on exit"
+        if [[ -z $LOGDIR ]]; then
+            $TOP_DIR/tools/worlddump.py
+        else
+            $TOP_DIR/tools/worlddump.py -d $LOGDIR
+        fi
+    fi
+
+    exit $r
+}
+
+# Exit on any errors so that errors don't compound
+trap err_trap ERR
+function err_trap {
+    local r=$?
+    set +o xtrace
+    if [[ -n "$LOGFILE" ]]; then
+        echo "${0##*/} failed: full log in $LOGFILE"
+    else
+        echo "${0##*/} failed"
+    fi
+    exit $r
+}
+
+# Begin trapping error exit codes
+set -o errexit
+
+# Print the commands being run so that we can see the command that triggers
+# an error.  It is also useful for following along as the install occurs.
+set -o xtrace
+
+
 # Common Configuration
 # --------------------
 
@@ -325,9 +501,6 @@ SYSLOG_PORT=${SYSLOG_PORT:-516}
 # Use color for logging output (only available if syslog is not used)
 LOG_COLOR=`trueorfalse True $LOG_COLOR`
 
-# Service startup timeout
-SERVICE_TIMEOUT=${SERVICE_TIMEOUT:-60}
-
 # Reset the bundle of CA certificates
 SSL_BUNDLE_FILE="$DATA_DIR/ca-bundle.pem"
 rm -f $SSL_BUNDLE_FILE
@@ -340,6 +513,15 @@ source $TOP_DIR/lib/rpc_backend
 # and the specified rpc backend is available on your platform.
 check_rpc_backend
 
+# Use native SSL for servers in SSL_ENABLED_SERVICES
+USE_SSL=$(trueorfalse False $USE_SSL)
+
+# Service to enable with SSL if USE_SSL is True
+SSL_ENABLED_SERVICES="key,nova,cinder,glance,s-proxy,neutron"
+
+if is_service_enabled tls-proxy && [ "$USE_SSL" == "True" ]; then
+    die $LINENO "tls-proxy and SSL are mutually exclusive"
+fi
 
 # Configure Projects
 # ==================
@@ -492,180 +674,6 @@ if is_service_enabled s-proxy; then
         read_password SWIFT_TEMPURL_KEY "ENTER A KEY FOR SWIFT TEMPURLS."
     fi
 fi
-
-
-# Configure logging
-# -----------------
-
-# Draw a spinner so the user knows something is happening
-function spinner {
-    local delay=0.75
-    local spinstr='/-\|'
-    printf "..." >&3
-    while [ true ]; do
-        local temp=${spinstr#?}
-        printf "[%c]" "$spinstr" >&3
-        local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
-        printf "\b\b\b" >&3
-    done
-}
-
-function kill_spinner {
-    if [ ! -z "$LAST_SPINNER_PID" ]; then
-        kill >/dev/null 2>&1 $LAST_SPINNER_PID
-        printf "\b\b\bdone\n" >&3
-    fi
-}
-
-# Echo text to the log file, summary log file and stdout
-# echo_summary "something to say"
-function echo_summary {
-    if [[ -t 3 && "$VERBOSE" != "True" ]]; then
-        kill_spinner
-        echo -n -e $@ >&6
-        spinner &
-        LAST_SPINNER_PID=$!
-    else
-        echo -e $@ >&6
-    fi
-}
-
-# Echo text only to stdout, no log files
-# echo_nolog "something not for the logs"
-function echo_nolog {
-    echo $@ >&3
-}
-
-if [[ is_fedora && $DISTRO == "rhel6" ]]; then
-    # poor old python2.6 doesn't have argparse by default, which
-    # outfilter.py uses
-    is_package_installed python-argparse || install_package python-argparse
-fi
-
-# Set up logging for ``stack.sh``
-# Set ``LOGFILE`` to turn on logging
-# Append '.xxxxxxxx' to the given name to maintain history
-# where 'xxxxxxxx' is a representation of the date the file was created
-TIMESTAMP_FORMAT=${TIMESTAMP_FORMAT:-"%F-%H%M%S"}
-if [[ -n "$LOGFILE" || -n "$SCREEN_LOGDIR" ]]; then
-    LOGDAYS=${LOGDAYS:-7}
-    CURRENT_LOG_TIME=$(date "+$TIMESTAMP_FORMAT")
-fi
-
-if [[ -n "$LOGFILE" ]]; then
-    # First clean up old log files.  Use the user-specified ``LOGFILE``
-    # as the template to search for, appending '.*' to match the date
-    # we added on earlier runs.
-    LINKDIR=$(dirname "$LOGFILE")
-    LOGDIR=$(dirname "$LOGFILE")/logs
-    LOGFILENAME=$(basename "$LOGFILE")
-    mkdir -p $LOGDIR
-    find $LOGDIR -maxdepth 1 -name $LOGFILENAME.\* -mtime +$LOGDAYS -exec rm {} \;
-    LOGFILE=$LOGDIR/$LOGFILENAME.${CURRENT_LOG_TIME}
-    SUMFILE=$LOGDIR/$LOGFILENAME.${CURRENT_LOG_TIME}.summary
-
-    # Redirect output according to config
-
-    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
-    # stdout later.
-    exec 3>&1
-    if [[ "$VERBOSE" == "True" ]]; then
-        # Set fd 1 and 2 to write the log file
-        exec 1> >( $TOP_DIR/tools/outfilter.py -v -o "${LOGFILE}" ) 2>&1
-        # Set fd 6 to summary log file
-        exec 6> >( $TOP_DIR/tools/outfilter.py -o "${SUMFILE}" )
-    else
-        # Set fd 1 and 2 to primary logfile
-        exec 1> >( $TOP_DIR/tools/outfilter.py -o "${LOGFILE}" ) 2>&1
-        # Set fd 6 to summary logfile and stdout
-        exec 6> >( $TOP_DIR/tools/outfilter.py -v -o "${SUMFILE}" >&3 )
-    fi
-
-    echo_summary "stack.sh log $LOGFILE"
-    # Specified logfile name always links to the most recent log
-    ln -sf $LOGFILE $LINKDIR/$LOGFILENAME
-    ln -sf $SUMFILE $LINKDIR/$LOGFILENAME.summary
-else
-    # Set up output redirection without log files
-    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
-    # stdout later.
-    exec 3>&1
-    if [[ "$VERBOSE" != "True" ]]; then
-        # Throw away stdout and stderr
-        exec 1>/dev/null 2>&1
-    fi
-    # Always send summary fd to original stdout
-    exec 6> >( $TOP_DIR/tools/outfilter.py -v >&3 )
-fi
-
-# Set up logging of screen windows
-# Set ``SCREEN_LOGDIR`` to turn on logging of screen windows to the
-# directory specified in ``SCREEN_LOGDIR``, we will log to the the file
-# ``screen-$SERVICE_NAME-$TIMESTAMP.log`` in that dir and have a link
-# ``screen-$SERVICE_NAME.log`` to the latest log file.
-# Logs are kept for as long specified in ``LOGDAYS``.
-if [[ -n "$SCREEN_LOGDIR" ]]; then
-
-    # We make sure the directory is created.
-    if [[ -d "$SCREEN_LOGDIR" ]]; then
-        # We cleanup the old logs
-        find $SCREEN_LOGDIR -maxdepth 1 -name screen-\*.log -mtime +$LOGDAYS -exec rm {} \;
-    else
-        mkdir -p $SCREEN_LOGDIR
-    fi
-fi
-
-
-# Set Up Script Execution
-# -----------------------
-
-# Kill background processes on exit
-trap exit_trap EXIT
-function exit_trap {
-    local r=$?
-    jobs=$(jobs -p)
-    # Only do the kill when we're logging through a process substitution,
-    # which currently is only to verbose logfile
-    if [[ -n $jobs && -n "$LOGFILE" && "$VERBOSE" == "True" ]]; then
-        echo "exit_trap: cleaning up child processes"
-        kill 2>&1 $jobs
-    fi
-
-    # Kill the last spinner process
-    kill_spinner
-
-    if [[ $r -ne 0 ]]; then
-        echo "Error on exit"
-        if [[ -z $LOGDIR ]]; then
-            $TOP_DIR/tools/worlddump.py
-        else
-            $TOP_DIR/tools/worlddump.py -d $LOGDIR
-        fi
-    fi
-
-    exit $r
-}
-
-# Exit on any errors so that errors don't compound
-trap err_trap ERR
-function err_trap {
-    local r=$?
-    set +o xtrace
-    if [[ -n "$LOGFILE" ]]; then
-        echo "${0##*/} failed: full log in $LOGFILE"
-    else
-        echo "${0##*/} failed"
-    fi
-    exit $r
-}
-
-
-set -o errexit
-
-# Print the commands being run so that we can see the command that triggers
-# an error.  It is also useful for following along as the install occurs.
-set -o xtrace
 
 
 # Install Packages
@@ -823,7 +831,7 @@ if is_service_enabled heat; then
     configure_heat
 fi
 
-if is_service_enabled tls-proxy; then
+if is_service_enabled tls-proxy || [ "$USE_SSL" == "True" ]; then
     configure_CA
     init_CA
     init_cert
@@ -989,7 +997,7 @@ if is_service_enabled key; then
         create_swift_accounts
     fi
 
-    if is_service_enabled heat; then
+    if is_service_enabled heat && [[ "$HEAT_STANDALONE" != "True" ]]; then
         create_heat_accounts
     fi
 
@@ -1289,6 +1297,10 @@ if is_service_enabled nova && is_service_enabled key; then
 
     if [ -f $SSL_BUNDLE_FILE ]; then
         USERRC_PARAMS="$USERRC_PARAMS --os-cacert $SSL_BUNDLE_FILE"
+    fi
+
+    if [[ "$HEAT_STANDALONE" = "True" ]]; then
+        USERRC_PARAMS="$USERRC_PARAMS --heat-url http://$HEAT_API_HOST:$HEAT_API_PORT/v1"
     fi
 
     $TOP_DIR/tools/create_userrc.sh $USERRC_PARAMS

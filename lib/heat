@@ -40,6 +40,8 @@ HEAT_CONF=$HEAT_CONF_DIR/heat.conf
 HEAT_ENV_DIR=$HEAT_CONF_DIR/environment.d
 HEAT_TEMPLATES_DIR=$HEAT_CONF_DIR/templates
 HEAT_STACK_DOMAIN=`trueorfalse True $HEAT_STACK_DOMAIN`
+HEAT_API_HOST=${HEAT_API_HOST:-$HOST_IP}
+HEAT_API_PORT=${HEAT_API_PORT:-8004}
 
 # other default options
 HEAT_DEFERRED_AUTH=${HEAT_DEFERRED_AUTH:-trusts}
@@ -69,6 +71,9 @@ function cleanup_heat {
 # configure_heat() - Set config files, create data dirs, etc
 function configure_heat {
     setup_develop $HEAT_DIR
+    if [[ "$HEAT_STANDALONE" = "True" ]]; then
+        setup_develop $HEAT_DIR/contrib/heat_keystoneclient_v2
+    fi
 
     if [[ ! -d $HEAT_CONF_DIR ]]; then
         sudo mkdir -p $HEAT_CONF_DIR
@@ -83,8 +88,6 @@ function configure_heat {
     HEAT_ENGINE_PORT=${HEAT_ENGINE_PORT:-8001}
     HEAT_API_CW_HOST=${HEAT_API_CW_HOST:-$HOST_IP}
     HEAT_API_CW_PORT=${HEAT_API_CW_PORT:-8003}
-    HEAT_API_HOST=${HEAT_API_HOST:-$HOST_IP}
-    HEAT_API_PORT=${HEAT_API_PORT:-8004}
     HEAT_API_PASTE_FILE=$HEAT_CONF_DIR/api-paste.ini
     HEAT_POLICY_FILE=$HEAT_CONF_DIR/policy.json
 
@@ -110,24 +113,21 @@ function configure_heat {
         setup_colorized_logging $HEAT_CONF DEFAULT tenant user
     fi
 
-    # keystone authtoken
-    iniset $HEAT_CONF keystone_authtoken identity_uri $KEYSTONE_AUTH_URI
-    configure_API_version $HEAT_CONF $IDENTITY_API_VERSION
-    iniset $HEAT_CONF keystone_authtoken cafile $KEYSTONE_SSL_CA
-    iniset $HEAT_CONF keystone_authtoken admin_tenant_name $SERVICE_TENANT_NAME
-    iniset $HEAT_CONF keystone_authtoken admin_user heat
-    iniset $HEAT_CONF keystone_authtoken admin_password $SERVICE_PASSWORD
-    iniset $HEAT_CONF keystone_authtoken signing_dir $HEAT_AUTH_CACHE_DIR
+    configure_auth_token_middleware $HEAT_CONF heat $HEAT_AUTH_CACHE_DIR
 
     if is_ssl_enabled_service "key"; then
-        iniset $HEAT_CONF clients_keystone ca_file $KEYSTONE_SSL_CA
+        iniset $HEAT_CONF clients_keystone ca_file $SSL_BUNDLE_FILE
     fi
 
     # ec2authtoken
     iniset $HEAT_CONF ec2authtoken auth_uri $KEYSTONE_SERVICE_URI/v2.0
 
     # paste_deploy
-    [[ "$HEAT_STANDALONE" = "True" ]] && iniset $HEAT_CONF paste_deploy flavor standalone
+    if [[ "$HEAT_STANDALONE" = "True" ]]; then
+        iniset $HEAT_CONF paste_deploy flavor standalone
+        iniset $HEAT_CONF DEFAULT keystone_backend heat_keystoneclient_v2.client.KeystoneClientV2
+        iniset $HEAT_CONF clients_heat url "http://$HEAT_API_HOST:$HEAT_API_PORT/v1/%(tenant_id)s"
+    fi
 
     # OpenStack API
     iniset $HEAT_CONF heat_api bind_port $HEAT_API_PORT
@@ -137,6 +137,18 @@ function configure_heat {
 
     # Cloudwatch API
     iniset $HEAT_CONF heat_api_cloudwatch bind_port $HEAT_API_CW_PORT
+
+    if is_ssl_enabled_service "key" || is_service_enabled tls-proxy; then
+        iniset $HEAT_CONF clients_keystone ca_file $SSL_BUNDLE_FILE
+    fi
+
+    if is_ssl_enabled_service "nova" || is_service_enabled tls-proxy; then
+        iniset $HEAT_CONF clients_nova ca_file $SSL_BUNDLE_FILE
+    fi
+
+    if is_ssl_enabled_service "cinder" || is_service_enabled tls-proxy; then
+        iniset $HEAT_CONF clients_cinder ca_file $SSL_BUNDLE_FILE
+    fi
 
     # heat environment
     sudo mkdir -p $HEAT_ENV_DIR
