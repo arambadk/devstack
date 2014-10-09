@@ -180,6 +180,7 @@ function neutron_plugin_configure_common {
 }
 
 function neutron_plugin_configure_debug_command {
+    return
 }
 
 function neutron_plugin_configure_dhcp_agent {
@@ -187,6 +188,7 @@ function neutron_plugin_configure_dhcp_agent {
 }
 
 function neutron_plugin_configure_l3_agent {
+    return
 }
 
 function _configure_cisco_router_plugin {

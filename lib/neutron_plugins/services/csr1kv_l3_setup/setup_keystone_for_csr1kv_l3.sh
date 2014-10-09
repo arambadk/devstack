@@ -10,11 +10,12 @@
 # i.e., it should be either 'neutron' or 'quantum', for
 # release >=Havana and release <=Grizzly, respectively.
 adminUser=${1:-neutron}
-adminRole="admin"
+adminRole=admin
+l3AdminTenant=L3AdminTenant
+serviceTenant=service
 # Below user is just for demos so that we don't see all logical instances.
-regularUser="viewer"
-password="viewer"
-l3AdminTenant="L3AdminTenant"
+regularUser=viewer
+password=viewer
 
 
 echo -n "Checking if $l3AdminTenant tenant exists ..."
@@ -50,3 +51,28 @@ else
    echo " Yes, it has."
 fi
 
+
+# What follows can be removed once L3AdminTenant is used to lookup UUID of L3AdminTenant
+
+echo -n "Determining UUID of $serviceTenant tenant ..."
+tenantId=`keystone tenant-get $serviceTenant 2>&1 | awk '/No tenant|id/ { if ($1 == "No") print "No"; else print $4; }'`
+
+if [ "$tenantId" == "No" ]; then
+   echo "Error: $serviceTenant tenant does not seem to exist. Aborting!"
+   exit 1
+else
+   echo " Done."
+fi
+
+
+echo -n "Checking if $adminUser user has admin privileges in $serviceTenant tenant ..."
+isAdmin=`keystone --os-username $adminUser --os-tenant-name $serviceTenant user-role-list 2>&1 | awk 'BEGIN { res="No" } { if ($4 == "admin") res="Yes"; } END { print res; }'`
+
+if [ "$isAdmin" == "No" ]; then
+   echo " No, it does not. Giving it admin rights."
+   admUserId=`keystone user-get $adminUser | awk '{ if ($2 == "id") print $4 }'`
+   admRoleId=`keystone role-get $adminRole | awk '{ if ($2 == "id") print $4 }'`
+   keystone user-role-add --user-id $admUserId --role-id $admRoleId --tenant-id $tenantId
+else
+   echo " Yes, it has."
+fi
