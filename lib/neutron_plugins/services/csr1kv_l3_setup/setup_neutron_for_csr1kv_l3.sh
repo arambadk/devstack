@@ -178,14 +178,18 @@ else
 fi
 
 
-echo -n "Checking if $template_file exists..."
-if [ -f $template_file ]; then
-    echo "Yes, it does."
-else
-    echo "No, it does not. Installing it."
-    cp $template_file_src $template_file
-fi
+#echo -n "Checking if $template_file exists..."
+#if [ -f $template_file ]; then
+#    echo "Yes, it does."
+#else
+#    echo "No, it does not. Installing it."
+#    cp $template_file_src $template_file
+#fi
 
+
+#Hareesh - Copying of template file everytime to cater for template file changes
+echo -n "Copying base template in $template_file_src to $template_file ..."
+    cp $template_file_src $template_file
 
 if [ "$plugin" == "n1kv" ]; then
     echo "Verifying that required N1kv network profiles exist:"
