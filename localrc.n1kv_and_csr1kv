@@ -29,6 +29,7 @@ NETWORK_GATEWAY=10.11.12.1
 #FLOATING_RANGE=172.16.6.32/27
 #PUBLIC_NETWORK_GATEWAY=172.16.6.33 
 PUBLIC_NETWORK_GATEWAY=<SET THIS VARIABLE!!!>
+LIBVIRT_FIREWALL_DRIVER=nova.virt.firewall.NoopFirewallDriver
 
 # Use br-int as bridge to reach external networks
 PUBLIC_BRIDGE=br-int
