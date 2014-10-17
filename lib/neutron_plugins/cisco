@@ -107,7 +107,7 @@ EOF
 }
 
 function install_ciscoconfparse {
-    sudo -e pip install ciscoconfparse
+    sudo -E pip install ciscoconfparse
 }
 
 function is_ciscoconfparse_installed {
