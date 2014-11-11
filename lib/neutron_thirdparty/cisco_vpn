@@ -8,7 +8,7 @@
 # * enable_service cisco_vpn
 #
 # This cannot be used with the q-l3 or q-vpn services and should be used with
-# the ciscocfgagent, q-ciscorouter, and q-ciscodevicemanager services.
+# the ciscocfgagent and q-ciscorouter services.
 #
 
 
