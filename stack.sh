@@ -90,16 +90,6 @@ source $TOP_DIR/lib/config
 # and ``DISTRO``
 GetDistro
 
-# Warn users who aren't on an explicitly supported distro, but allow them to
-# override check and attempt installation with ``FORCE=yes ./stack``
-if [[ ! ${DISTRO} =~ (precise|trusty|7.0|wheezy|sid|testing|jessie|f19|f20|rhel6|rhel7) ]]; then
-    echo "WARNING: this script has not been tested on $DISTRO"
-    if [[ "$FORCE" != "yes" ]]; then
-        die $LINENO "If you wish to run this script anyway run with FORCE=yes"
-    fi
-fi
-
-
 # Global Settings
 # ---------------
 
@@ -150,6 +140,15 @@ if [[ ! -r $TOP_DIR/stackrc ]]; then
     die $LINENO "missing $TOP_DIR/stackrc - did you grab more than just stack.sh?"
 fi
 source $TOP_DIR/stackrc
+
+# Warn users who aren't on an explicitly supported distro, but allow them to
+# override check and attempt installation with ``FORCE=yes ./stack``
+if [[ ! ${DISTRO} =~ (precise|trusty|7.0|wheezy|sid|testing|jessie|f19|f20|f21|rhel6|rhel7) ]]; then
+    echo "WARNING: this script has not been tested on $DISTRO"
+    if [[ "$FORCE" != "yes" ]]; then
+        die $LINENO "If you wish to run this script anyway run with FORCE=yes"
+    fi
+fi
 
 # Check to see if we are already running DevStack
 # Note that this may fail if USE_SCREEN=False
@@ -210,18 +209,10 @@ if is_ubuntu; then
     echo 'APT::Acquire::Retries "20";' | sudo tee /etc/apt/apt.conf.d/80retry  >/dev/null
 fi
 
-# upstream Rackspace centos7 images have an issue where cloud-init is
-# installed via pip because there were not official packages when the
-# image was created (fix in the works).  Remove all pip packages
-# before we do anything else
-if [[ $DISTRO = "rhel7" && is_rackspace ]]; then
-    (sudo pip freeze | xargs sudo pip uninstall -y) || true
-fi
-
 # Some distros need to add repos beyond the defaults provided by the vendor
 # to pick up required packages.
 
-if [[ is_fedora && $DISTRO == "rhel6" ]]; then
+if is_fedora && [ $DISTRO == "rhel6" ]; then
     # Installing Open vSwitch on RHEL requires enabling the RDO repo.
     RHEL6_RDO_REPO_RPM=${RHEL6_RDO_REPO_RPM:-"http://rdo.fedorapeople.org/openstack-icehouse/rdo-release-icehouse.rpm"}
     RHEL6_RDO_REPO_ID=${RHEL6_RDO_REPO_ID:-"openstack-icehouse"}
@@ -232,38 +223,43 @@ if [[ is_fedora && $DISTRO == "rhel6" ]]; then
     fi
 fi
 
-if [[ is_fedora && ( $DISTRO == "rhel6" || $DISTRO == "rhel7" ) ]]; then
+if is_fedora && [[ $DISTRO == "rhel6" || $DISTRO == "rhel7" ]]; then
     # RHEL requires EPEL for many Open Stack dependencies
-    if ! sudo yum repolist enabled epel | grep -q 'epel'; then
-        echo "EPEL not detected; installing"
-        # This trick installs the latest epel-release from a bootstrap
-        # repo, then removes itself (as epel-release installed the
-        # "real" repo).
-        #
-        # you would think that rather than this, you could use
-        # $releasever directly in .repo file we create below.  However
-        # RHEL gives a $releasever of "6Server" which breaks the path;
-        # see https://bugzilla.redhat.com/show_bug.cgi?id=1150759
-        if [[ $DISTRO == "rhel7" ]]; then
-            epel_ver="7"
-        elif [[ $DISTRO == "rhel6" ]]; then
-            epel_ver="6"
-        fi
 
-        cat <<EOF | sudo tee /etc/yum.repos.d/epel-bootstrap.repo
-[epel]
+    # note we always remove and install latest -- some environments
+    # use snapshot images, and if EPEL version updates they break
+    # unless we update them to latest version.
+    if sudo yum repolist enabled epel | grep -q 'epel'; then
+        uninstall_package epel-release || true
+    fi
+
+    # This trick installs the latest epel-release from a bootstrap
+    # repo, then removes itself (as epel-release installed the
+    # "real" repo).
+    #
+    # you would think that rather than this, you could use
+    # $releasever directly in .repo file we create below.  However
+    # RHEL gives a $releasever of "6Server" which breaks the path;
+    # see https://bugzilla.redhat.com/show_bug.cgi?id=1150759
+    if [[ $DISTRO == "rhel7" ]]; then
+        epel_ver="7"
+    elif [[ $DISTRO == "rhel6" ]]; then
+        epel_ver="6"
+    fi
+
+    cat <<EOF | sudo tee /etc/yum.repos.d/epel-bootstrap.repo
+[epel-bootstrap]
 name=Bootstrap EPEL
 mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-$epel_ver&arch=\$basearch
 failovermethod=priority
 enabled=0
 gpgcheck=0
 EOF
-        # bare yum call due to --enablerepo
-        sudo yum --enablerepo=epel -y install epel-release || \
-            die $LINENO "Error installing EPEL repo, cannot continue"
-        # epel rpm has installed it's version
-        sudo rm -f /etc/yum.repos.d/epel-bootstrap.repo
-    fi
+    # bare yum call due to --enablerepo
+    sudo yum --enablerepo=epel-bootstrap -y install epel-release || \
+        die $LINENO "Error installing EPEL repo, cannot continue"
+    # epel rpm has installed it's version
+    sudo rm -f /etc/yum.repos.d/epel-bootstrap.repo
 
     # ... and also optional to be enabled
     is_package_installed yum-utils || install_package yum-utils
@@ -351,7 +347,7 @@ function echo_nolog {
     echo $@ >&3
 }
 
-if [[ is_fedora && $DISTRO == "rhel6" ]]; then
+if is_fedora && [ $DISTRO == "rhel6" ]; then
     # poor old python2.6 doesn't have argparse by default, which
     # outfilter.py uses
     is_package_installed python-argparse || install_package python-argparse
@@ -565,7 +561,6 @@ source $TOP_DIR/lib/swift
 source $TOP_DIR/lib/ceilometer
 source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/neutron
-source $TOP_DIR/lib/baremetal
 source $TOP_DIR/lib/ldap
 source $TOP_DIR/lib/dstat
 
@@ -578,9 +573,6 @@ if [[ -d $TOP_DIR/extras.d ]]; then
         [[ -r $i ]] && source $i source
     done
 fi
-
-# Set the destination directories for other OpenStack projects
-OPENSTACKCLIENT_DIR=$DEST/python-openstackclient
 
 # Interactive Configuration
 # -------------------------
@@ -783,8 +775,14 @@ fi
 # Install middleware
 install_keystonemiddleware
 
-git_clone $OPENSTACKCLIENT_REPO $OPENSTACKCLIENT_DIR $OPENSTACKCLIENT_BRANCH
-setup_develop $OPENSTACKCLIENT_DIR
+# install the OpenStack client, needed for most setup commands
+if use_library_from_git "python-openstackclient"; then
+    git_clone_by_name "python-openstackclient"
+    setup_dev_lib "python-openstackclient"
+else
+    pip_install python-openstackclient
+fi
+
 
 if is_service_enabled key; then
     if [ "$KEYSTONE_AUTH_HOST" == "$SERVICE_HOST" ]; then
@@ -1137,14 +1135,6 @@ if is_service_enabled nova; then
     init_nova_cells
 fi
 
-# Extra things to prepare nova for baremetal, before nova starts
-if is_service_enabled nova && is_baremetal; then
-    echo_summary "Preparing for nova baremetal"
-    prepare_baremetal_toolchain
-    configure_baremetal_nova_dirs
-fi
-
-
 # Extras Configuration
 # ====================
 
@@ -1198,28 +1188,16 @@ if is_service_enabled g-reg; then
     TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
     die_if_not_set $LINENO TOKEN "Keystone fail to get token"
 
-    if is_baremetal; then
-        echo_summary "Creating and uploading baremetal images"
+    echo_summary "Uploading images"
 
-        # build and upload separate deploy kernel & ramdisk
-        upload_baremetal_deploy $TOKEN
-
-        # upload images, separating out the kernel & ramdisk for PXE boot
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_baremetal_image $image_url $TOKEN
-        done
-    else
-        echo_summary "Uploading images"
-
-        # Option to upload legacy ami-tty, which works with xenserver
-        if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
-            IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
-        fi
-
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_image $image_url $TOKEN
-        done
+    # Option to upload legacy ami-tty, which works with xenserver
+    if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
+        IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
     fi
+
+    for image_url in ${IMAGE_URLS//,/ }; do
+        upload_image $image_url $TOKEN
+    done
 fi
 
 # Create an access key and secret key for nova ec2 register image
@@ -1271,7 +1249,7 @@ if is_service_enabled neutron; then
     setup_for_csr1kv
 fi
 # Once neutron agents are started setup initial network elements
-if is_service_enabled q-svc; then
+if is_service_enabled q-svc && [[ "$NEUTRON_CREATE_INITIAL_NETWORKS" == "True" ]]; then
     echo_summary "Creating initial neutron network elements"
     create_neutron_initial_network
     setup_neutron_debug
@@ -1326,32 +1304,6 @@ if is_service_enabled nova && is_service_enabled key; then
     $TOP_DIR/tools/create_userrc.sh $USERRC_PARAMS
 fi
 
-
-# If we are running nova with baremetal driver, there are a few
-# last-mile configuration bits to attend to, which must happen
-# after n-api and n-sch have started.
-# Also, creating the baremetal flavor must happen after images
-# are loaded into glance, though just knowing the IDs is sufficient here
-if is_service_enabled nova && is_baremetal; then
-    # create special flavor for baremetal if we know what images to associate
-    [[ -n "$BM_DEPLOY_KERNEL_ID" ]] && [[ -n "$BM_DEPLOY_RAMDISK_ID" ]] && \
-        create_baremetal_flavor $BM_DEPLOY_KERNEL_ID $BM_DEPLOY_RAMDISK_ID
-
-    # otherwise user can manually add it later by calling nova-baremetal-manage
-    [[ -n "$BM_FIRST_MAC" ]] && add_baremetal_node
-
-    if [[ "$BM_DNSMASQ_FROM_NOVA_NETWORK" = "False" ]]; then
-        # NOTE: we do this here to ensure that our copy of dnsmasq is running
-        sudo pkill dnsmasq || true
-        sudo dnsmasq --conf-file= --port=0 --enable-tftp --tftp-root=/tftpboot \
-            --dhcp-boot=pxelinux.0 --bind-interfaces --pid-file=/var/run/dnsmasq.pid \
-            --interface=$BM_DNSMASQ_IFACE --dhcp-range=$BM_DNSMASQ_RANGE \
-            ${BM_DNSMASQ_DNS:+--dhcp-option=option:dns-server,$BM_DNSMASQ_DNS}
-    fi
-    # ensure callback daemon is running
-    sudo pkill nova-baremetal-deploy-helper || true
-    run_process baremetal "nova-baremetal-deploy-helper"
-fi
 
 # Save some values we generated for later use
 CURRENT_RUN_TIME=$(date "+$TIMESTAMP_FORMAT")
