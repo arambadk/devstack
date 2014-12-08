@@ -902,6 +902,7 @@ function _configure_n1kv_subplugin {
     iniset $cisco_cfg_file CISCO_N1K vxlan_id_ranges $Q_CISCO_PLUGIN_VXLAN_ID_RANGES
     iniset $cisco_cfg_file CISCO_N1K network_vlan_ranges $Q_CISCO_PLUGIN_VLAN_RANGES
     iniset $cisco_cfg_file CISCO_N1K default_policy_profile test-profile
+    iniset $cisco_cfg_file CISCO_N1K restrict_network_profiles False
 
     # Setup the integration bridge by calling the ovs_base
     OVS_BRIDGE=$Q_CISCO_PLUGIN_INTEGRATION_BRIDGE
