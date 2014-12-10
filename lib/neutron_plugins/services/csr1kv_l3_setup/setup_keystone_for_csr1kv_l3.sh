@@ -17,14 +17,13 @@ serviceTenant=service
 regularUser=viewer
 password=viewer
 
-set -x
 
 echo -n "Checking if $l3AdminTenant tenant exists ..."
-tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant|id/ { if ($1 == "No") print "No"; else if ($2 == "id") print $4; }'`
+tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant| id / { if ($1 == "No") print "No"; else print $4; }'`
 
 if [ "$tenantId" == "No" ]; then
    echo " No, it does not. Creating it."
-   tenantId=`keystone tenant-create --name $l3AdminTenant --description "Owner of CSR1kv VMs" | awk '/id/ { if ($2 == "id") print $4; }'`
+   tenantId=`keystone tenant-create --name $l3AdminTenant --description "Owner of CSR1kv VMs" | awk '/ id / { print $4; }'`
 else
    echo " Yes, it does."
 fi

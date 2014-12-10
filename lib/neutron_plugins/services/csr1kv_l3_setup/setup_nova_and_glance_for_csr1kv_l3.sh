@@ -12,7 +12,6 @@ localrc=$3
 mysql_user=$4
 mysql_password=$5
 
-set -x
 
 if [[ -n $mysql_user && -n $mysql_password ]]; then
    mysql_auth="-u $mysql_user -p$mysql_password"
@@ -72,7 +71,7 @@ function add_host_to_aggregate {
 }
 
 
-tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant|id/ { if ($1 == "No") print "No"; else if ($2 == "id") print $4; }'`
+tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant| id / { if ($1 == "No") print "No"; else print $4; }'`
 if [ "$tenantId" == "No" ]; then
    echo "No $l3AdminTenant exists, please create one using the setup_keystone... script then re-run this script."
    echo "Aborting!"

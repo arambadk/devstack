@@ -44,18 +44,18 @@ CREATE_TEST_NETWORKS=$(trueorfalse "False" $Q_CISCO_CREATE_TEST_NETWORKS)
 source ~/devstack/openrc admin demo
 echo "***************** Setting up Keystone for CSR1kv *****************"
 ./setup_keystone_for_csr1kv_l3.sh $osn
-pause
+
 source ~/devstack/openrc $osn L3AdminTenant
+
 echo "***************** Setting up Nova & Glance for CSR1kv *****************"
 ./setup_nova_and_glance_for_csr1kv_l3.sh $osn $plugin $localrc $mysql_user $mysql_password
-pause
+
 echo "***************** Setting up Neutron for CSR1kv *****************"
 ./setup_neutron_for_csr1kv_l3.sh $osn $plugin $localrc
-pause
+
 echo "***************** Setting up CfgAgent connectivity *****************"
 ./setup_l3cfgagent_networking.sh $osn $plugin $localrc $mgmt_ip
 
-pause
 if [[ "$CREATE_TEST_NETWORKS" == "True" ]]; then
     source ~/devstack/openrc admin demo
     echo "***************** Setting up test networks *****************"

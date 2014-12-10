@@ -10,8 +10,6 @@ plugin=${2:-n1kv}
 #plugin=ovs
 localrc=$3
 
-set -x
-
 if [[ ! -z $localrc && -f $localrc ]]; then
     eval $(grep ^Q_CISCO_PLUGIN_VSM_IP= $localrc)
     eval $(grep Q_CISCO_PLUGIN_VSM_USERNAME= $localrc)
@@ -159,7 +157,7 @@ function get_port_profile_id() {
 }
 
 
-tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant|id/ { if ($1 == "No") print "No"; else if ($2 == "id") print $4; }'`
+tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant| id / { if ($1 == "No") print "No"; else print $4; }'`
 if [ "$tenantId" == "No" ]; then
     echo "No $l3AdminTenant exists, please create one using the setup_keystone... script then re-run this script."
     echo "Aborting!"
