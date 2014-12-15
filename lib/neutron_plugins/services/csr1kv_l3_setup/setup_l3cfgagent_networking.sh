@@ -48,6 +48,7 @@ function get_port_profile_id() {
             sleep 5
         fi
     done
+}
 
 
 if [ "$plugin" == "n1kv" ]; then
