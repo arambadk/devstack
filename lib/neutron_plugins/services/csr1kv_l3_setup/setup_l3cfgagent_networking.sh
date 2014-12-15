@@ -13,6 +13,10 @@ if [[ ! -z $localrc && -f $localrc ]]; then
     eval $(grep ^OVS_PHYSICAL_BRIDGE= $localrc)
 fi
 
+if [[ ! -z $localrc && -f $localrc ]]; then
+    eval $(grep ^PUBLIC_BRIDGE= $localrc)
+fi
+
 adminUser=$osn
 l3AdminTenant=L3AdminTenant
 
@@ -30,9 +34,20 @@ if [ "$tenantId" == "No" ]; then
     echo "No $l3AdminTenant exists, please create one using the setup_keystone... script then re-run this script."
     echo "Aborting!"
     exit 1
-else
-	echo "$l3AdminTenant exists"
 fi
+
+
+function get_port_profile_id() {
+    local name=$1
+    local c=0
+    pProfileId=None
+    while [ $c -le 15 ] && [ "$pProfileId" == "None" ]; do
+        pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
+        if [[ "$pProfileId" == "None" ]]; then
+            let c+=1
+            sleep 5
+        fi
+    done
 
 
 if [ "$plugin" == "n1kv" ]; then
@@ -45,8 +60,6 @@ elif [ "$plugin" == "ovs" ]; then
         echo "Failed to lookup VLAN of $osnMgmtNwName network, please check health of ML2 plugin."
         echo "Aborting!"
         exit 1
-    else
-    	echo "MgmtVAN is $mgmtVLAN"
     fi
 fi
 
@@ -63,13 +76,11 @@ fi
 
 macAddr=`echo "$port" | awk '/mac_address/ { print $4; }'`
 if [ -z ${macAddr+x} ] || [ "$macAddr" == "" ]; then
-    echo "Failed to create $portName port, please check health of ML2 plugin."
+    echo "Failed to create $portName port, please check health of plugin."
     echo "Aborting!"
     exit 1
 fi
-echo "Mac address is $macAddr"
 portId=`echo "$port" | awk '/ id/ { print $4; }'`
-echo "Portid is $portId"
 
 
 hasVeth=`ip link show | awk '/'"$vethHostSideName"'/ { print $2; }'`
@@ -85,12 +96,10 @@ sudo ip link set $vethBridgeSideName up
 sudo ip -4 addr add $l3CfgAgentMgmtIP/$osnMgmtNwLen dev $vethHostSideName
 
 if [ "$plugin" == "n1kv" ]; then
-    plugging_bridge=$OVS_BRIDGE
+    plugging_bridge=$PUBLIC_BRIDGE
 else  # We are in ovs (with ml2)
     plugging_bridge=$OVS_PHYSICAL_BRIDGE
-    echo "Plugging bridge: $plugging_bridge"
     extra_ovs_params="tag=$mgmtVLAN"
-    echo "extra ovs params : $extra_ovs_params" 
 fi
 sudo ovs-vsctl -- --may-exist add-port $plugging_bridge $vethBridgeSideName $extra_ovs_params -- set interface $vethBridgeSideName external-ids:iface-id=$portId -- set interface $vethBridgeSideName external-ids:attached-mac=$macAddr -- set interface $vethBridgeSideName external-ids:iface-status=active
 
