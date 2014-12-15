@@ -643,6 +643,7 @@ initialize_database_backends && echo "Using $DATABASE_TYPE database backend" || 
 
 # Rabbit connection info
 if is_service_enabled rabbit; then
+    RABBIT_USERID=${RABBIT_USERID:-stackrabbit}
     RABBIT_HOST=${RABBIT_HOST:-$SERVICE_HOST}
     read_password RABBIT_PASSWORD "ENTER A PASSWORD TO USE FOR RABBIT."
 fi
@@ -780,7 +781,7 @@ if use_library_from_git "python-openstackclient"; then
     git_clone_by_name "python-openstackclient"
     setup_dev_lib "python-openstackclient"
 else
-    pip_install python-openstackclient
+    pip_install 'python-openstackclient>=1.0.0'
 fi
 
 

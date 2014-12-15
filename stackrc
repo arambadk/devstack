@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # stackrc
 #
 # Find the other rc files
@@ -44,7 +46,7 @@ REGION_NAME=${REGION_NAME:-RegionOne}
 # this allows us to pass ENABLED_SERVICES
 if [[ -z "$ENABLED_SERVICES" ]]; then
     # core compute (glance / keystone / nova (+ nova-network))
-    ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-cond,n-sch,n-novnc,n-xvnc,n-cauth
+    ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-cond,n-sch,n-xvnc,n-cauth
     # cinder
     ENABLED_SERVICES+=,c-sch,c-api,c-vol
     # heat
@@ -184,6 +186,18 @@ KEYSTONE_BRANCH=${KEYSTONE_BRANCH:-master}
 # neutron service
 NEUTRON_REPO=${NEUTRON_REPO:-${GIT_BASE}/openstack/neutron.git}
 NEUTRON_BRANCH=${NEUTRON_BRANCH:-master}
+
+# neutron fwaas service
+NEUTRON_FWAAS_REPO=${NEUTRON_FWAAS_REPO:-${GIT_BASE}/openstack/neutron-fwaas.git}
+NEUTRON_FWAAS_BRANCH=${NEUTRON_FWAAS_BRANCH:-master}
+
+# neutron lbaas service
+NEUTRON_LBAAS_REPO=${NEUTRON_LBAAS_REPO:-${GIT_BASE}/openstack/neutron-lbaas.git}
+NEUTRON_LBAAS_BRANCH=${NEUTRON_LBAAS_BRANCH:-master}
+
+# neutron vpnaas service
+NEUTRON_VPNAAS_REPO=${NEUTRON_VPNAAS_REPO:-${GIT_BASE}/openstack/neutron-vpnaas.git}
+NEUTRON_VPNAAS_BRANCH=${NEUTRON_VPNAAS_BRANCH:-master}
 
 # compute service
 NOVA_REPO=${NOVA_REPO:-${GIT_BASE}/openstack/nova.git}
@@ -624,6 +638,12 @@ API_WORKERS=${API_WORKERS:=$(( ($(nproc)/2)<2 ? 2 : ($(nproc)/2) ))}
 
 # Service startup timeout
 SERVICE_TIMEOUT=${SERVICE_TIMEOUT:-60}
+
+# Support alternative yum -- in future Fedora 'dnf' will become the
+# only supported installer, but for now 'yum' and 'dnf' are both
+# available in parallel with compatible CLIs.  Allow manual switching
+# till we get to the point we need to handle this automatically
+YUM=${YUM:-yum}
 
 # Following entries need to be last items in file
 
