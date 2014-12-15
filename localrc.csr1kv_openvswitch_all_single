@@ -11,9 +11,7 @@ NEUTRON_REPO=${GIT_BASE}/CiscoSystems/neutron.git
 NEUTRON_BRANCH=csr1kv_for_routing_juno
 #NOVA_REPO=${GIT_BASE}/CiscoSystems/nova.git
 #NOVA_BRANCH=csr1kv_for_routing_juno
-# Cisco doesn't currently have a requirements fork so use bob's fork
-REQUIREMENTS_REPO=${GIT_BASE}/bobmel/requirements.git
-REQUIREMENTS_BRANCH=csr1kv_for_routing_juno
+
 
 # Destination path for installation of the OpenStack components.
 # There is no need to specify it unless you want the code in
@@ -25,8 +23,18 @@ REQUIREMENTS_BRANCH=csr1kv_for_routing_juno
 # with MULTI_HOST=True
 MULTI_HOST=False
 
+# Disable Nova network and Tempest
 disable_service n-net
 disable_service tempest
+# Disable Heat
+disable_service h-eng
+disable_service h-api
+disable_service h-api-cfn
+disable_serviceh-api-cw
+# Disable Cinder
+disable_service c-sch
+disable_service c-api
+disable_service c-vol
 
 enable_service neutron
 enable_service q-svc
@@ -92,9 +100,9 @@ LIBVIRT_TYPE=kvm
 # List of images to use.
 case "$LIBVIRT_TYPE" in
     lxc) # the cirros root disk in the uec tarball is empty, so it will not work for lxc
-	IMAGE_URLS="http://cloud-images.ubuntu.com/releases/oneiric/release/ubuntu-11.10-server-cloudimg-amd64.tar.gz,http://download.cirros-cloud.net/0.3.1/cirros-0.3.1-x86_64-rootfs.img.gz";;
+	IMAGE_URLS="http://cloud-images.ubuntu.com/releases/14.04.1/release/ubuntu-14.04-server-cloudimg-amd64.tar.gz,http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-rootfs.img.gz";;
     *)  # otherwise, use the uec style image (with kernel, ramdisk, disk)
-	IMAGE_URLS="http://cloud-images.ubuntu.com/releases/oneiric/release/ubuntu-11.10-server-cloudimg-amd64.tar.gz,http://download.cirros-cloud.net/0.3.1/cirros-0.3.1-x86_64-uec.tar.gz";;
+	IMAGE_URLS="http://cloud-images.ubuntu.com/releases/14.04.1/release/ubuntu-14.04-server-cloudimg-amd64.tar.gz,http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-uec.tar.gz";;
 esac
 
 # Uncomment this to set the default instance type.  

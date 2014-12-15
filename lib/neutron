@@ -117,6 +117,12 @@ NEUTRON_CONF_DIR=/etc/neutron
 NEUTRON_CONF=$NEUTRON_CONF_DIR/neutron.conf
 export NEUTRON_TEST_CONFIG_FILE=${NEUTRON_TEST_CONFIG_FILE:-"$NEUTRON_CONF_DIR/debug.ini"}
 
+# BOB: Added for devstack runs as part of CI for code not yet upstream
+Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR=${Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR:-$TOP_DIR/lib/neutron_plugins/services/csr1kv_l3_setup/}
+Q_CISCO_PATCH_NEUTRON=$(trueorfalse False $Q_CISCO_PATCH_NEUTRON)
+source $TOP_DIR/lib/cisco_patching_functions
+# BOB: Added for devstack runs as part of CI for code not yet upstream
+
 # Agent binaries.  Note, binary paths for other agents are set in per-service
 # scripts in lib/neutron_plugins/services/
 AGENT_DHCP_BINARY="$NEUTRON_BIN_DIR/neutron-dhcp-agent"
@@ -552,14 +558,15 @@ function create_neutron_accounts {
 
 function setup_for_csr1kv {
     if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
-	plugin=ovs
+	    plugin=ovs
     elif [[ "$Q_PLUGIN" == "cisco" || "${Q_CISCO_PLUGIN_SUBPLUGINS[0]}" == "n1kv" ]]; then
-	plugin=n1kv
+	    plugin=n1kv
     else
-	die $LINENO "Not a deployment with CSR1kv. Exiting!"
+	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
     echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
     (cd $NEUTRON_DIR/neutron/plugins/cisco/l3/setup/; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
+    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
 }
 
 function create_neutron_initial_network {
