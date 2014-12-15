@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # lib/horizon
 # Functions to control the configuration and operation of the horizon service
 
@@ -25,8 +27,9 @@ set +o xtrace
 # --------
 
 # Set up default directories
+GITDIR["django_openstack_auth"]=$DEST/django_openstack_auth
+
 HORIZON_DIR=$DEST/horizon
-HORIZONAUTH_DIR=$DEST/django_openstack_auth
 
 # local_settings.py is used to customize Dashboard settings.
 # The example file in Horizon repo is used by default.
@@ -84,6 +87,12 @@ function cleanup_horizon {
 # configure_horizon() - Set config files, create data dirs, etc
 function configure_horizon {
     setup_develop $HORIZON_DIR
+
+    # Compile message catalogs.
+    # Horizon is installed as develop mode, so we can compile here.
+    # Message catalog compilation is handled by Django admin script,
+    # so compiling them after the installation avoids Django installation twice.
+    (cd $HORIZON_DIR; ./run_tests.sh -N --compilemessages)
 }
 
 # init_horizon() - Initialize databases, etc.
@@ -92,26 +101,13 @@ function init_horizon {
     local local_settings=$HORIZON_DIR/openstack_dashboard/local/local_settings.py
     cp $HORIZON_SETTINGS $local_settings
 
-    if is_service_enabled neutron; then
-        _horizon_config_set $local_settings OPENSTACK_NEUTRON_NETWORK enable_security_group $Q_USE_SECGROUP
-    fi
-    # enable loadbalancer dashboard in case service is enabled
-    if is_service_enabled q-lbaas; then
-        _horizon_config_set $local_settings OPENSTACK_NEUTRON_NETWORK enable_lb True
-    fi
-
-    # enable firewall dashboard in case service is enabled
-    if is_service_enabled q-fwaas; then
-        _horizon_config_set $local_settings OPENSTACK_NEUTRON_NETWORK enable_firewall True
-    fi
-
-    # enable VPN dashboard in case service is enabled
-    if is_service_enabled q-vpn; then
-        _horizon_config_set $local_settings OPENSTACK_NEUTRON_NETWORK enable_vpn True
-    fi
+    _horizon_config_set $local_settings "" COMPRESS_OFFLINE True
 
     _horizon_config_set $local_settings "" OPENSTACK_HOST \"${KEYSTONE_SERVICE_HOST}\"
     _horizon_config_set $local_settings "" OPENSTACK_KEYSTONE_URL "\"${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}:${KEYSTONE_SERVICE_PORT}/v2.0\""
+    if [[ -n "$KEYSTONE_TOKEN_HASH_ALGORITHM" ]]; then
+        _horizon_config_set $local_settings "" OPENSTACK_TOKEN_HASH_ALGORITHM \""$KEYSTONE_TOKEN_HASH_ALGORITHM"\"
+    fi
 
     if [ -f $SSL_BUNDLE_FILE ]; then
         _horizon_config_set $local_settings "" OPENSTACK_SSL_CACERT \"${SSL_BUNDLE_FILE}\"
@@ -119,12 +115,6 @@ function init_horizon {
 
     # Create an empty directory that apache uses as docroot
     sudo mkdir -p $HORIZON_DIR/.blackhole
-
-    # Apache 2.4 uses mod_authz_host for access control now (instead of "Allow")
-    local horizon_require=''
-    if check_apache_version "2.4" ; then
-        horizon_require='Require all granted'
-    fi
 
     local horizon_conf=$(apache_site_config_for horizon)
 
@@ -135,7 +125,6 @@ function init_horizon {
         s,%HORIZON_DIR%,$HORIZON_DIR,g;
         s,%APACHE_NAME%,$APACHE_NAME,g;
         s,%DEST%,$DEST,g;
-        s,%HORIZON_REQUIRE%,$horizon_require,g;
     \" $FILES/apache-horizon.template >$horizon_conf"
 
     if is_ubuntu; then
@@ -152,14 +141,34 @@ function init_horizon {
 
     # Remove old log files that could mess with how devstack detects whether Horizon
     # has been successfully started (see start_horizon() and functions::screen_it())
+    # and run_process
     sudo rm -f /var/log/$APACHE_NAME/horizon_*
+
+    # Setup alias for django-admin which could be different depending on distro
+    local django_admin
+    if type -p django-admin > /dev/null; then
+        django_admin=django-admin
+    else
+        django_admin=django-admin.py
+    fi
+
+    DJANGO_SETTINGS_MODULE=openstack_dashboard.settings $django_admin collectstatic --noinput
+    DJANGO_SETTINGS_MODULE=openstack_dashboard.settings $django_admin compress --force
 
 }
 
 # install_django_openstack_auth() - Collect source and prepare
 function install_django_openstack_auth {
-    git_clone $HORIZONAUTH_REPO $HORIZONAUTH_DIR $HORIZONAUTH_BRANCH
-    setup_install $HORIZONAUTH_DIR
+    if use_library_from_git "django_openstack_auth"; then
+        local dir=${GITDIR["django_openstack_auth"]}
+        git_clone_by_name "django_openstack_auth"
+        # Compile message catalogs before installation
+        _prepare_message_catalog_compilation
+        (cd $dir; python setup.py compile_catalog)
+        setup_dev_lib "django_openstack_auth"
+    fi
+    # if we aren't using this library from git, then we just let it
+    # get dragged in by the horizon setup.
 }
 
 # install_horizon() - Collect source and prepare
@@ -173,12 +182,19 @@ function install_horizon {
 # start_horizon() - Start running processes, including screen
 function start_horizon {
     restart_apache_server
-    screen_it horizon "cd $HORIZON_DIR && sudo tail -f /var/log/$APACHE_NAME/horizon_error.log"
+    tail_log horizon /var/log/$APACHE_NAME/horizon_error.log
 }
 
 # stop_horizon() - Stop running processes (non-screen)
 function stop_horizon {
     stop_apache_server
+}
+
+# NOTE: It can be moved to common functions, but it is only used by compilation
+# of django_openstack_auth catalogs at the moment.
+function _prepare_message_catalog_compilation {
+    local babel_package=$(grep ^Babel $REQUIREMENTS_DIR/global-requirements.txt)
+    pip_install "$babel_package"
 }
 
 

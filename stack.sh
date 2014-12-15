@@ -34,9 +34,11 @@ export LC_ALL
 # Make sure umask is sane
 umask 022
 
+# Not all distros have sbin in PATH for regular users.
+PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin
+
 # Keep track of the devstack directory
 TOP_DIR=$(cd $(dirname "$0") && pwd)
-
 
 # Sanity Checks
 # -------------
@@ -69,20 +71,10 @@ if [[ $EUID -eq 0 ]]; then
     echo "You are running this script as root."
     echo "Cut it out."
     echo "Really."
-    echo "If you need an account to run DevStack, do this (as root, heh) to create $STACK_USER:"
+    echo "If you need an account to run DevStack, do this (as root, heh) to create a non-root account:"
     echo "$TOP_DIR/tools/create-stack-user.sh"
     exit 1
 fi
-
-# Check to see if we are already running DevStack
-# Note that this may fail if USE_SCREEN=False
-if type -p screen >/dev/null && screen -ls | egrep -q "[0-9].$SCREEN_NAME"; then
-    echo "You are already running a stack.sh session."
-    echo "To rejoin this session type 'screen -x stack'."
-    echo "To destroy this session, type './unstack.sh'."
-    exit 1
-fi
-
 
 # Prepare the environment
 # -----------------------
@@ -97,16 +89,6 @@ source $TOP_DIR/lib/config
 # ``os_RELEASE``, ``os_UPDATE``, ``os_PACKAGE``, ``os_CODENAME``
 # and ``DISTRO``
 GetDistro
-
-# Warn users who aren't on an explicitly supported distro, but allow them to
-# override check and attempt installation with ``FORCE=yes ./stack``
-if [[ ! ${DISTRO} =~ (precise|trusty|7.0|wheezy|sid|testing|jessie|f19|f20|rhel6|rhel7) ]]; then
-    echo "WARNING: this script has not been tested on $DISTRO"
-    if [[ "$FORCE" != "yes" ]]; then
-        die $LINENO "If you wish to run this script anyway run with FORCE=yes"
-    fi
-fi
-
 
 # Global Settings
 # ---------------
@@ -129,6 +111,7 @@ if [[ -r $TOP_DIR/local.conf ]]; then
         fi
     done
 fi
+
 
 # ``stack.sh`` is customizable by setting environment variables.  Override a
 # default setting via export::
@@ -157,6 +140,24 @@ if [[ ! -r $TOP_DIR/stackrc ]]; then
     die $LINENO "missing $TOP_DIR/stackrc - did you grab more than just stack.sh?"
 fi
 source $TOP_DIR/stackrc
+
+# Warn users who aren't on an explicitly supported distro, but allow them to
+# override check and attempt installation with ``FORCE=yes ./stack``
+if [[ ! ${DISTRO} =~ (precise|trusty|7.0|wheezy|sid|testing|jessie|f19|f20|f21|rhel6|rhel7) ]]; then
+    echo "WARNING: this script has not been tested on $DISTRO"
+    if [[ "$FORCE" != "yes" ]]; then
+        die $LINENO "If you wish to run this script anyway run with FORCE=yes"
+    fi
+fi
+
+# Check to see if we are already running DevStack
+# Note that this may fail if USE_SCREEN=False
+if type -p screen > /dev/null && screen -ls | egrep -q "[0-9]\.$SCREEN_NAME"; then
+    echo "You are already running a stack.sh session."
+    echo "To rejoin this session type 'screen -x stack'."
+    echo "To destroy this session, type './unstack.sh'."
+    exit 1
+fi
 
 
 # Local Settings
@@ -211,18 +212,10 @@ if is_ubuntu; then
     echo 'APT::Acquire::Retries "20";' | sudo tee /etc/apt/apt.conf.d/80retry  >/dev/null
 fi
 
-# upstream Rackspace centos7 images have an issue where cloud-init is
-# installed via pip because there were not official packages when the
-# image was created (fix in the works).  Remove all pip packages
-# before we do anything else
-if [[ $DISTRO = "rhel7" && is_rackspace ]]; then
-    (sudo pip freeze | xargs sudo pip uninstall -y) || true
-fi
-
 # Some distros need to add repos beyond the defaults provided by the vendor
 # to pick up required packages.
 
-if [[ is_fedora && $DISTRO == "rhel6" ]]; then
+if is_fedora && [ $DISTRO == "rhel6" ]; then
     # Installing Open vSwitch on RHEL requires enabling the RDO repo.
     RHEL6_RDO_REPO_RPM=${RHEL6_RDO_REPO_RPM:-"http://rdo.fedorapeople.org/openstack-icehouse/rdo-release-icehouse.rpm"}
     RHEL6_RDO_REPO_ID=${RHEL6_RDO_REPO_ID:-"openstack-icehouse"}
@@ -233,18 +226,43 @@ if [[ is_fedora && $DISTRO == "rhel6" ]]; then
     fi
 fi
 
-if [[ is_fedora && ( $DISTRO == "rhel6" || $DISTRO == "rhel7" ) ]]; then
+if is_fedora && [[ $DISTRO == "rhel6" || $DISTRO == "rhel7" ]]; then
     # RHEL requires EPEL for many Open Stack dependencies
+
+    # note we always remove and install latest -- some environments
+    # use snapshot images, and if EPEL version updates they break
+    # unless we update them to latest version.
+    if sudo yum repolist enabled epel | grep -q 'epel'; then
+        uninstall_package epel-release || true
+    fi
+
+    # This trick installs the latest epel-release from a bootstrap
+    # repo, then removes itself (as epel-release installed the
+    # "real" repo).
+    #
+    # you would think that rather than this, you could use
+    # $releasever directly in .repo file we create below.  However
+    # RHEL gives a $releasever of "6Server" which breaks the path;
+    # see https://bugzilla.redhat.com/show_bug.cgi?id=1150759
     if [[ $DISTRO == "rhel7" ]]; then
-        EPEL_RPM=${RHEL7_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-0.2.noarch.rpm"}
+        epel_ver="7"
     elif [[ $DISTRO == "rhel6" ]]; then
-        EPEL_RPM=${RHEL6_EPEL_RPM:-"http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"}
+        epel_ver="6"
     fi
-    if ! sudo yum repolist enabled epel | grep -q 'epel'; then
-        echo "EPEL not detected; installing"
-        yum_install ${EPEL_RPM} || \
-            die $LINENO "Error installing EPEL repo, cannot continue"
-    fi
+
+    cat <<EOF | sudo tee /etc/yum.repos.d/epel-bootstrap.repo
+[epel-bootstrap]
+name=Bootstrap EPEL
+mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-$epel_ver&arch=\$basearch
+failovermethod=priority
+enabled=0
+gpgcheck=0
+EOF
+    # bare yum call due to --enablerepo
+    sudo yum --enablerepo=epel-bootstrap -y install epel-release || \
+        die $LINENO "Error installing EPEL repo, cannot continue"
+    # epel rpm has installed it's version
+    sudo rm -f /etc/yum.repos.d/epel-bootstrap.repo
 
     # ... and also optional to be enabled
     is_package_installed yum-utils || install_package yum-utils
@@ -286,6 +304,182 @@ if [ -z "`grep ^127.0.0.1 /etc/hosts | grep $LOCAL_HOSTNAME`" ]; then
 fi
 
 
+# Configure Logging
+# -----------------
+
+# Set up logging level
+VERBOSE=$(trueorfalse True $VERBOSE)
+
+# Draw a spinner so the user knows something is happening
+function spinner {
+    local delay=0.75
+    local spinstr='/-\|'
+    printf "..." >&3
+    while [ true ]; do
+        local temp=${spinstr#?}
+        printf "[%c]" "$spinstr" >&3
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b" >&3
+    done
+}
+
+function kill_spinner {
+    if [ ! -z "$LAST_SPINNER_PID" ]; then
+        kill >/dev/null 2>&1 $LAST_SPINNER_PID
+        printf "\b\b\bdone\n" >&3
+    fi
+}
+
+# Echo text to the log file, summary log file and stdout
+# echo_summary "something to say"
+function echo_summary {
+    if [[ -t 3 && "$VERBOSE" != "True" ]]; then
+        kill_spinner
+        echo -n -e $@ >&6
+        spinner &
+        LAST_SPINNER_PID=$!
+    else
+        echo -e $@ >&6
+    fi
+}
+
+# Echo text only to stdout, no log files
+# echo_nolog "something not for the logs"
+function echo_nolog {
+    echo $@ >&3
+}
+
+if is_fedora && [ $DISTRO == "rhel6" ]; then
+    # poor old python2.6 doesn't have argparse by default, which
+    # outfilter.py uses
+    is_package_installed python-argparse || install_package python-argparse
+fi
+
+# Set up logging for ``stack.sh``
+# Set ``LOGFILE`` to turn on logging
+# Append '.xxxxxxxx' to the given name to maintain history
+# where 'xxxxxxxx' is a representation of the date the file was created
+TIMESTAMP_FORMAT=${TIMESTAMP_FORMAT:-"%F-%H%M%S"}
+if [[ -n "$LOGFILE" || -n "$SCREEN_LOGDIR" ]]; then
+    LOGDAYS=${LOGDAYS:-7}
+    CURRENT_LOG_TIME=$(date "+$TIMESTAMP_FORMAT")
+fi
+
+if [[ -n "$LOGFILE" ]]; then
+    # First clean up old log files.  Use the user-specified ``LOGFILE``
+    # as the template to search for, appending '.*' to match the date
+    # we added on earlier runs.
+    LOGDIR=$(dirname "$LOGFILE")
+    LOGFILENAME=$(basename "$LOGFILE")
+    mkdir -p $LOGDIR
+    find $LOGDIR -maxdepth 1 -name $LOGFILENAME.\* -mtime +$LOGDAYS -exec rm {} \;
+    LOGFILE=$LOGFILE.${CURRENT_LOG_TIME}
+    SUMFILE=$LOGFILE.${CURRENT_LOG_TIME}.summary
+
+    # Redirect output according to config
+
+    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
+    # stdout later.
+    exec 3>&1
+    if [[ "$VERBOSE" == "True" ]]; then
+        # Set fd 1 and 2 to write the log file
+        exec 1> >( $TOP_DIR/tools/outfilter.py -v -o "${LOGFILE}" ) 2>&1
+        # Set fd 6 to summary log file
+        exec 6> >( $TOP_DIR/tools/outfilter.py -o "${SUMFILE}" )
+    else
+        # Set fd 1 and 2 to primary logfile
+        exec 1> >( $TOP_DIR/tools/outfilter.py -o "${LOGFILE}" ) 2>&1
+        # Set fd 6 to summary logfile and stdout
+        exec 6> >( $TOP_DIR/tools/outfilter.py -v -o "${SUMFILE}" >&3 )
+    fi
+
+    echo_summary "stack.sh log $LOGFILE"
+    # Specified logfile name always links to the most recent log
+    ln -sf $LOGFILE $LOGDIR/$LOGFILENAME
+    ln -sf $SUMFILE $LOGDIR/$LOGFILENAME.summary
+else
+    # Set up output redirection without log files
+    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
+    # stdout later.
+    exec 3>&1
+    if [[ "$VERBOSE" != "True" ]]; then
+        # Throw away stdout and stderr
+        exec 1>/dev/null 2>&1
+    fi
+    # Always send summary fd to original stdout
+    exec 6> >( $TOP_DIR/tools/outfilter.py -v >&3 )
+fi
+
+# Set up logging of screen windows
+# Set ``SCREEN_LOGDIR`` to turn on logging of screen windows to the
+# directory specified in ``SCREEN_LOGDIR``, we will log to the the file
+# ``screen-$SERVICE_NAME-$TIMESTAMP.log`` in that dir and have a link
+# ``screen-$SERVICE_NAME.log`` to the latest log file.
+# Logs are kept for as long specified in ``LOGDAYS``.
+if [[ -n "$SCREEN_LOGDIR" ]]; then
+
+    # We make sure the directory is created.
+    if [[ -d "$SCREEN_LOGDIR" ]]; then
+        # We cleanup the old logs
+        find $SCREEN_LOGDIR -maxdepth 1 -name screen-\*.log -mtime +$LOGDAYS -exec rm {} \;
+    else
+        mkdir -p $SCREEN_LOGDIR
+    fi
+fi
+
+
+# Configure Error Traps
+# ---------------------
+
+# Kill background processes on exit
+trap exit_trap EXIT
+function exit_trap {
+    local r=$?
+    jobs=$(jobs -p)
+    # Only do the kill when we're logging through a process substitution,
+    # which currently is only to verbose logfile
+    if [[ -n $jobs && -n "$LOGFILE" && "$VERBOSE" == "True" ]]; then
+        echo "exit_trap: cleaning up child processes"
+        kill 2>&1 $jobs
+    fi
+
+    # Kill the last spinner process
+    kill_spinner
+
+    if [[ $r -ne 0 ]]; then
+        echo "Error on exit"
+        if [[ -z $LOGDIR ]]; then
+            $TOP_DIR/tools/worlddump.py
+        else
+            $TOP_DIR/tools/worlddump.py -d $LOGDIR
+        fi
+    fi
+
+    exit $r
+}
+
+# Exit on any errors so that errors don't compound
+trap err_trap ERR
+function err_trap {
+    local r=$?
+    set +o xtrace
+    if [[ -n "$LOGFILE" ]]; then
+        echo "${0##*/} failed: full log in $LOGFILE"
+    else
+        echo "${0##*/} failed"
+    fi
+    exit $r
+}
+
+# Begin trapping error exit codes
+set -o errexit
+
+# Print the commands being run so that we can see the command that triggers
+# an error.  It is also useful for following along as the install occurs.
+set -o xtrace
+
+
 # Common Configuration
 # --------------------
 
@@ -323,14 +517,8 @@ SYSLOG=`trueorfalse False $SYSLOG`
 SYSLOG_HOST=${SYSLOG_HOST:-$HOST_IP}
 SYSLOG_PORT=${SYSLOG_PORT:-516}
 
-# for DSTAT logging
-DSTAT_FILE=${DSTAT_FILE:-"dstat.txt"}
-
 # Use color for logging output (only available if syslog is not used)
 LOG_COLOR=`trueorfalse True $LOG_COLOR`
-
-# Service startup timeout
-SERVICE_TIMEOUT=${SERVICE_TIMEOUT:-60}
 
 # Reset the bundle of CA certificates
 SSL_BUNDLE_FILE="$DATA_DIR/ca-bundle.pem"
@@ -344,6 +532,15 @@ source $TOP_DIR/lib/rpc_backend
 # and the specified rpc backend is available on your platform.
 check_rpc_backend
 
+# Use native SSL for servers in SSL_ENABLED_SERVICES
+USE_SSL=$(trueorfalse False $USE_SSL)
+
+# Service to enable with SSL if USE_SSL is True
+SSL_ENABLED_SERVICES="key,nova,cinder,glance,s-proxy,neutron"
+
+if is_service_enabled tls-proxy && [ "$USE_SSL" == "True" ]; then
+    die $LINENO "tls-proxy and SSL are mutually exclusive"
+fi
 
 # Configure Projects
 # ==================
@@ -367,8 +564,8 @@ source $TOP_DIR/lib/swift
 source $TOP_DIR/lib/ceilometer
 source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/neutron
-source $TOP_DIR/lib/baremetal
 source $TOP_DIR/lib/ldap
+source $TOP_DIR/lib/dstat
 
 # Extras Source
 # --------------
@@ -379,9 +576,6 @@ if [[ -d $TOP_DIR/extras.d ]]; then
         [[ -r $i ]] && source $i source
     done
 fi
-
-# Set the destination directories for other OpenStack projects
-OPENSTACKCLIENT_DIR=$DEST/python-openstackclient
 
 # Interactive Configuration
 # -------------------------
@@ -426,7 +620,7 @@ function read_password {
             echo "Invalid chars in password.  Try again:"
         done
         if [ ! $pw ]; then
-            pw=$(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 20)
+            pw=$(generate_hex_string 10)
         fi
         eval "$var=$pw"
         echo "$var=$pw" >> $localrc
@@ -452,6 +646,7 @@ initialize_database_backends && echo "Using $DATABASE_TYPE database backend" || 
 
 # Rabbit connection info
 if is_service_enabled rabbit; then
+    RABBIT_USERID=${RABBIT_USERID:-stackrabbit}
     RABBIT_HOST=${RABBIT_HOST:-$SERVICE_HOST}
     read_password RABBIT_PASSWORD "ENTER A PASSWORD TO USE FOR RABBIT."
 fi
@@ -495,180 +690,6 @@ if is_service_enabled s-proxy; then
         read_password SWIFT_TEMPURL_KEY "ENTER A KEY FOR SWIFT TEMPURLS."
     fi
 fi
-
-
-# Configure logging
-# -----------------
-
-# Draw a spinner so the user knows something is happening
-function spinner {
-    local delay=0.75
-    local spinstr='/-\|'
-    printf "..." >&3
-    while [ true ]; do
-        local temp=${spinstr#?}
-        printf "[%c]" "$spinstr" >&3
-        local spinstr=$temp${spinstr%"$temp"}
-        sleep $delay
-        printf "\b\b\b" >&3
-    done
-}
-
-function kill_spinner {
-    if [ ! -z "$LAST_SPINNER_PID" ]; then
-        kill >/dev/null 2>&1 $LAST_SPINNER_PID
-        printf "\b\b\bdone\n" >&3
-    fi
-}
-
-# Echo text to the log file, summary log file and stdout
-# echo_summary "something to say"
-function echo_summary {
-    if [[ -t 3 && "$VERBOSE" != "True" ]]; then
-        kill_spinner
-        echo -n -e $@ >&6
-        spinner &
-        LAST_SPINNER_PID=$!
-    else
-        echo -e $@ >&6
-    fi
-}
-
-# Echo text only to stdout, no log files
-# echo_nolog "something not for the logs"
-function echo_nolog {
-    echo $@ >&3
-}
-
-if [[ is_fedora && $DISTRO == "rhel6" ]]; then
-    # poor old python2.6 doesn't have argparse by default, which
-    # outfilter.py uses
-    is_package_installed python-argparse || install_package python-argparse
-fi
-
-# Set up logging for ``stack.sh``
-# Set ``LOGFILE`` to turn on logging
-# Append '.xxxxxxxx' to the given name to maintain history
-# where 'xxxxxxxx' is a representation of the date the file was created
-TIMESTAMP_FORMAT=${TIMESTAMP_FORMAT:-"%F-%H%M%S"}
-if [[ -n "$LOGFILE" || -n "$SCREEN_LOGDIR" ]]; then
-    LOGDAYS=${LOGDAYS:-7}
-    CURRENT_LOG_TIME=$(date "+$TIMESTAMP_FORMAT")
-fi
-
-if [[ -n "$LOGFILE" ]]; then
-    # First clean up old log files.  Use the user-specified ``LOGFILE``
-    # as the template to search for, appending '.*' to match the date
-    # we added on earlier runs.
-    LINKDIR=$(dirname "$LOGFILE")
-    LOGDIR=$(dirname "$LOGFILE")/logs
-    LOGFILENAME=$(basename "$LOGFILE")
-    mkdir -p $LOGDIR
-    find $LOGDIR -maxdepth 1 -name $LOGFILENAME.\* -mtime +$LOGDAYS -exec rm {} \;
-    LOGFILE=$LOGDIR/$LOGFILENAME.${CURRENT_LOG_TIME}
-    SUMFILE=$LOGDIR/$LOGFILENAME.${CURRENT_LOG_TIME}.summary
-
-    # Redirect output according to config
-
-    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
-    # stdout later.
-    exec 3>&1
-    if [[ "$VERBOSE" == "True" ]]; then
-        # Set fd 1 and 2 to write the log file
-        exec 1> >( $TOP_DIR/tools/outfilter.py -v -o "${LOGFILE}" ) 2>&1
-        # Set fd 6 to summary log file
-        exec 6> >( $TOP_DIR/tools/outfilter.py -o "${SUMFILE}" )
-    else
-        # Set fd 1 and 2 to primary logfile
-        exec 1> >( $TOP_DIR/tools/outfilter.py -o "${LOGFILE}" ) 2>&1
-        # Set fd 6 to summary logfile and stdout
-        exec 6> >( $TOP_DIR/tools/outfilter.py -v -o "${SUMFILE}" >&3 )
-    fi
-
-    echo_summary "stack.sh log $LOGFILE"
-    # Specified logfile name always links to the most recent log
-    ln -sf $LOGFILE $LINKDIR/$LOGFILENAME
-    ln -sf $SUMFILE $LINKDIR/$LOGFILENAME.summary
-else
-    # Set up output redirection without log files
-    # Set fd 3 to a copy of stdout. So we can set fd 1 without losing
-    # stdout later.
-    exec 3>&1
-    if [[ "$VERBOSE" != "True" ]]; then
-        # Throw away stdout and stderr
-        exec 1>/dev/null 2>&1
-    fi
-    # Always send summary fd to original stdout
-    exec 6> >( $TOP_DIR/tools/outfilter.py -v >&3 )
-fi
-
-# Set up logging of screen windows
-# Set ``SCREEN_LOGDIR`` to turn on logging of screen windows to the
-# directory specified in ``SCREEN_LOGDIR``, we will log to the the file
-# ``screen-$SERVICE_NAME-$TIMESTAMP.log`` in that dir and have a link
-# ``screen-$SERVICE_NAME.log`` to the latest log file.
-# Logs are kept for as long specified in ``LOGDAYS``.
-if [[ -n "$SCREEN_LOGDIR" ]]; then
-
-    # We make sure the directory is created.
-    if [[ -d "$SCREEN_LOGDIR" ]]; then
-        # We cleanup the old logs
-        find $SCREEN_LOGDIR -maxdepth 1 -name screen-\*.log -mtime +$LOGDAYS -exec rm {} \;
-    else
-        mkdir -p $SCREEN_LOGDIR
-    fi
-fi
-
-
-# Set Up Script Execution
-# -----------------------
-
-# Kill background processes on exit
-trap exit_trap EXIT
-function exit_trap {
-    local r=$?
-    jobs=$(jobs -p)
-    # Only do the kill when we're logging through a process substitution,
-    # which currently is only to verbose logfile
-    if [[ -n $jobs && -n "$LOGFILE" && "$VERBOSE" == "True" ]]; then
-        echo "exit_trap: cleaning up child processes"
-        kill 2>&1 $jobs
-    fi
-
-    # Kill the last spinner process
-    kill_spinner
-
-    if [[ $r -ne 0 ]]; then
-        echo "Error on exit"
-        if [[ -z $LOGDIR ]]; then
-            ./tools/worlddump.py
-        else
-            ./tools/worlddump.py -d $LOGDIR
-        fi
-    fi
-
-    exit $r
-}
-
-# Exit on any errors so that errors don't compound
-trap err_trap ERR
-function err_trap {
-    local r=$?
-    set +o xtrace
-    if [[ -n "$LOGFILE" ]]; then
-        echo "${0##*/} failed: full log in $LOGFILE"
-    else
-        echo "${0##*/} failed"
-    fi
-    exit $r
-}
-
-
-set -o errexit
-
-# Print the commands being run so that we can see the command that triggers
-# an error.  It is also useful for following along as the install occurs.
-set -o xtrace
 
 
 # Install Packages
@@ -758,8 +779,14 @@ fi
 # Install middleware
 install_keystonemiddleware
 
-git_clone $OPENSTACKCLIENT_REPO $OPENSTACKCLIENT_DIR $OPENSTACKCLIENT_BRANCH
-setup_develop $OPENSTACKCLIENT_DIR
+# install the OpenStack client, needed for most setup commands
+if use_library_from_git "python-openstackclient"; then
+    git_clone_by_name "python-openstackclient"
+    setup_dev_lib "python-openstackclient"
+else
+    pip_install 'python-openstackclient>=1.0.0'
+fi
+
 
 if is_service_enabled key; then
     if [ "$KEYSTONE_AUTH_HOST" == "$SERVICE_HOST" ]; then
@@ -826,7 +853,7 @@ if is_service_enabled heat; then
     configure_heat
 fi
 
-if is_service_enabled tls-proxy; then
+if is_service_enabled tls-proxy || [ "$USE_SSL" == "True" ]; then
     configure_CA
     init_CA
     init_cert
@@ -949,12 +976,7 @@ init_service_check
 # -------
 
 # A better kind of sysstat, with the top process per time slice
-DSTAT_OPTS="-tcmndrylp --top-cpu-adv"
-if [[ -n ${SCREEN_LOGDIR} ]]; then
-    screen_it dstat "cd $TOP_DIR; dstat $DSTAT_OPTS | tee $SCREEN_LOGDIR/$DSTAT_FILE"
-else
-    screen_it dstat "dstat $DSTAT_OPTS"
-fi
+start_dstat
 
 # Start Services
 # ==============
@@ -997,7 +1019,7 @@ if is_service_enabled key; then
         create_swift_accounts
     fi
 
-    if is_service_enabled heat; then
+    if is_service_enabled heat && [[ "$HEAT_STANDALONE" != "True" ]]; then
         create_heat_accounts
     fi
 
@@ -1117,14 +1139,6 @@ if is_service_enabled nova; then
     init_nova_cells
 fi
 
-# Extra things to prepare nova for baremetal, before nova starts
-if is_service_enabled nova && is_baremetal; then
-    echo_summary "Preparing for nova baremetal"
-    prepare_baremetal_toolchain
-    configure_baremetal_nova_dirs
-fi
-
-
 # Extras Configuration
 # ====================
 
@@ -1178,28 +1192,16 @@ if is_service_enabled g-reg; then
     TOKEN=$(keystone token-get | grep ' id ' | get_field 2)
     die_if_not_set $LINENO TOKEN "Keystone fail to get token"
 
-    if is_baremetal; then
-        echo_summary "Creating and uploading baremetal images"
+    echo_summary "Uploading images"
 
-        # build and upload separate deploy kernel & ramdisk
-        upload_baremetal_deploy $TOKEN
-
-        # upload images, separating out the kernel & ramdisk for PXE boot
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_baremetal_image $image_url $TOKEN
-        done
-    else
-        echo_summary "Uploading images"
-
-        # Option to upload legacy ami-tty, which works with xenserver
-        if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
-            IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
-        fi
-
-        for image_url in ${IMAGE_URLS//,/ }; do
-            upload_image $image_url $TOKEN
-        done
+    # Option to upload legacy ami-tty, which works with xenserver
+    if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
+        IMAGE_URLS="${IMAGE_URLS:+${IMAGE_URLS},}https://github.com/downloads/citrix-openstack/warehouse/tty.tgz"
     fi
+
+    for image_url in ${IMAGE_URLS//,/ }; do
+        upload_image $image_url $TOKEN
+    done
 fi
 
 # Create an access key and secret key for nova ec2 register image
@@ -1212,16 +1214,12 @@ fi
 
 # Create a randomized default value for the keymgr's fixed_key
 if is_service_enabled nova; then
-    FIXED_KEY=""
-    for i in $(seq 1 64); do
-        FIXED_KEY+=$(echo "obase=16; $(($RANDOM % 16))" | bc);
-    done;
-    iniset $NOVA_CONF keymgr fixed_key "$FIXED_KEY"
+    iniset $NOVA_CONF keymgr fixed_key $(generate_hex_string 32)
 fi
 
 if is_service_enabled zeromq; then
     echo_summary "Starting zermomq receiver"
-    screen_it zeromq "cd $NOVA_DIR && $OSLO_BIN_DIR/oslo-messaging-zmq-receiver"
+    run_process zeromq "$OSLO_BIN_DIR/oslo-messaging-zmq-receiver"
 fi
 
 # Launch the nova-api and wait for it to answer before continuing
@@ -1255,7 +1253,7 @@ if is_service_enabled neutron; then
     setup_for_csr1kv
 fi
 # Once neutron agents are started setup initial network elements
-if is_service_enabled q-svc; then
+if is_service_enabled q-svc && [[ "$NEUTRON_CREATE_INITIAL_NETWORKS" == "True" ]]; then
     echo_summary "Creating initial neutron network elements"
     create_neutron_initial_network
     setup_neutron_debug
@@ -1303,35 +1301,13 @@ if is_service_enabled nova && is_service_enabled key; then
         USERRC_PARAMS="$USERRC_PARAMS --os-cacert $SSL_BUNDLE_FILE"
     fi
 
+    if [[ "$HEAT_STANDALONE" = "True" ]]; then
+        USERRC_PARAMS="$USERRC_PARAMS --heat-url http://$HEAT_API_HOST:$HEAT_API_PORT/v1"
+    fi
+
     $TOP_DIR/tools/create_userrc.sh $USERRC_PARAMS
 fi
 
-
-# If we are running nova with baremetal driver, there are a few
-# last-mile configuration bits to attend to, which must happen
-# after n-api and n-sch have started.
-# Also, creating the baremetal flavor must happen after images
-# are loaded into glance, though just knowing the IDs is sufficient here
-if is_service_enabled nova && is_baremetal; then
-    # create special flavor for baremetal if we know what images to associate
-    [[ -n "$BM_DEPLOY_KERNEL_ID" ]] && [[ -n "$BM_DEPLOY_RAMDISK_ID" ]] && \
-        create_baremetal_flavor $BM_DEPLOY_KERNEL_ID $BM_DEPLOY_RAMDISK_ID
-
-    # otherwise user can manually add it later by calling nova-baremetal-manage
-    [[ -n "$BM_FIRST_MAC" ]] && add_baremetal_node
-
-    if [[ "$BM_DNSMASQ_FROM_NOVA_NETWORK" = "False" ]]; then
-        # NOTE: we do this here to ensure that our copy of dnsmasq is running
-        sudo pkill dnsmasq || true
-        sudo dnsmasq --conf-file= --port=0 --enable-tftp --tftp-root=/tftpboot \
-            --dhcp-boot=pxelinux.0 --bind-interfaces --pid-file=/var/run/dnsmasq.pid \
-            --interface=$BM_DNSMASQ_IFACE --dhcp-range=$BM_DNSMASQ_RANGE \
-            ${BM_DNSMASQ_DNS:+--dhcp-option=option:dns-server,$BM_DNSMASQ_DNS}
-    fi
-    # ensure callback daemon is running
-    sudo pkill nova-baremetal-deploy-helper || true
-    screen_it baremetal "cd ; nova-baremetal-deploy-helper"
-fi
 
 # Save some values we generated for later use
 CURRENT_RUN_TIME=$(date "+$TIMESTAMP_FORMAT")
@@ -1425,51 +1401,55 @@ if [[ -n "$DEPRECATED_TEXT" ]]; then
     echo_summary "WARNING: $DEPRECATED_TEXT"
 fi
 
-# TODO(dtroyer): Remove Q_AGENT_EXTRA_AGENT_OPTS after stable/juno branch is cut
-if [[ -n "$Q_AGENT_EXTRA_AGENT_OPTS" ]]; then
-    echo ""
-    echo_summary "WARNING: Q_AGENT_EXTRA_AGENT_OPTS is used"
-    echo "You are using Q_AGENT_EXTRA_AGENT_OPTS to pass configuration into $NEUTRON_CONF."
-    echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
-    echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
-    echo "
+if is_service_enabled neutron; then
+    # TODO(dtroyer): Remove Q_AGENT_EXTRA_AGENT_OPTS after stable/juno branch is cut
+    if [[ -n "$Q_AGENT_EXTRA_AGENT_OPTS" ]]; then
+        echo ""
+        echo_summary "WARNING: Q_AGENT_EXTRA_AGENT_OPTS is used"
+        echo "You are using Q_AGENT_EXTRA_AGENT_OPTS to pass configuration into $NEUTRON_CONF."
+        echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
+        echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
+        echo "
 [[post-config|/\$Q_PLUGIN_CONF_FILE]]
 [DEFAULT]
 "
-    for I in "${Q_AGENT_EXTRA_AGENT_OPTS[@]}"; do
-        # Replace the first '=' with ' ' for iniset syntax
-        echo ${I}
-    done
-fi
+        for I in "${Q_AGENT_EXTRA_AGENT_OPTS[@]}"; do
+            # Replace the first '=' with ' ' for iniset syntax
+            echo ${I}
+        done
+    fi
 
-# TODO(dtroyer): Remove Q_AGENT_EXTRA_SRV_OPTS after stable/juno branch is cut
-if [[ -n "$Q_AGENT_EXTRA_SRV_OPTS" ]]; then
-    echo ""
-    echo_summary "WARNING: Q_AGENT_EXTRA_SRV_OPTS is used"
-    echo "You are using Q_AGENT_EXTRA_SRV_OPTS to pass configuration into $NEUTRON_CONF."
-    echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
-    echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
-    echo "
+    # TODO(dtroyer): Remove Q_AGENT_EXTRA_SRV_OPTS after stable/juno branch is cut
+    if [[ -n "$Q_AGENT_EXTRA_SRV_OPTS" ]]; then
+        echo ""
+        echo_summary "WARNING: Q_AGENT_EXTRA_SRV_OPTS is used"
+        echo "You are using Q_AGENT_EXTRA_SRV_OPTS to pass configuration into $NEUTRON_CONF."
+        echo "Please convert that configuration in localrc to a $NEUTRON_CONF section in local.conf:"
+        echo "Q_AGENT_EXTRA_AGENT_OPTS will be removed early in the 'K' development cycle"
+        echo "
 [[post-config|/\$Q_PLUGIN_CONF_FILE]]
 [DEFAULT]
 "
-    for I in "${Q_AGENT_EXTRA_SRV_OPTS[@]}"; do
-        # Replace the first '=' with ' ' for iniset syntax
-        echo ${I}
-    done
+        for I in "${Q_AGENT_EXTRA_SRV_OPTS[@]}"; do
+            # Replace the first '=' with ' ' for iniset syntax
+            echo ${I}
+        done
+    fi
 fi
 
-# TODO(dtroyer): Remove CINDER_MULTI_LVM_BACKEND after stable/juno branch is cut
-if [[ "$CINDER_MULTI_LVM_BACKEND" = "True" ]]; then
-    echo ""
-    echo_summary "WARNING: CINDER_MULTI_LVM_BACKEND is used"
-    echo "You are using CINDER_MULTI_LVM_BACKEND to configure Cinder's multiple LVM backends"
-    echo "Please convert that configuration in local.conf to use CINDER_ENABLED_BACKENDS."
-    echo "CINDER_ENABLED_BACKENDS will be removed early in the 'K' development cycle"
-    echo "
+if is_service_enabled cinder; then
+    # TODO(dtroyer): Remove CINDER_MULTI_LVM_BACKEND after stable/juno branch is cut
+    if [[ "$CINDER_MULTI_LVM_BACKEND" = "True" ]]; then
+        echo ""
+        echo_summary "WARNING: CINDER_MULTI_LVM_BACKEND is used"
+        echo "You are using CINDER_MULTI_LVM_BACKEND to configure Cinder's multiple LVM backends"
+        echo "Please convert that configuration in local.conf to use CINDER_ENABLED_BACKENDS."
+        echo "CINDER_MULTI_LVM_BACKEND will be removed early in the 'K' development cycle"
+        echo "
 [[local|localrc]]
 CINDER_ENABLED_BACKENDS=lvm:lvmdriver-1,lvm:lvmdriver-2
 "
+    fi
 fi
 
 # Indicate how long this took to run (bash maintained variable ``SECONDS``)

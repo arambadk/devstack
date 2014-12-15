@@ -45,7 +45,7 @@ function start_the_ciscocfgagent {
     # Need to enable q-ciscocfgagent due to how is_service_enabled function works
     enable_service q-ciscocfgagent
     CISCO_CFG_CONF_FILES="--config-file $NEUTRON_CONF --config-file=$Q_CISCO_CFGAGENT_CONF_FILE"
-    screen_it q-ciscocfgagent "cd $NEUTRON_DIR && python $AGENT_CISCO_CFGAGENT_BINARY $CISCO_CFG_CONF_FILES"
+    run_process q-ciscocfgagent "cd $NEUTRON_DIR && python $AGENT_CISCO_CFGAGENT_BINARY $CISCO_CFG_CONF_FILES"
 }
 
 function stop_ciscocfgagent {

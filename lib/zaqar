@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # lib/zaqar
 # Install and start **Zaqar** service
 
@@ -20,6 +22,7 @@
 # start_zaqar
 # stop_zaqar
 # cleanup_zaqar
+# cleanup_zaqar_mongodb
 
 # Save trace setting
 XTRACE=$(set +o | grep xtrace)
@@ -72,9 +75,17 @@ function is_zaqar_enabled {
     return 1
 }
 
-# cleanup_zaqar() - Remove residual data files, anything left over from previous
-# runs that a clean run would need to clean up
+# cleanup_zaqar() - Cleans up general things from previous
+# runs and storage specific left overs.
 function cleanup_zaqar {
+    if [ "$ZAQAR_BACKEND" = 'mongodb' ] ; then
+        cleanup_zaqar_mongodb
+    fi
+}
+
+# cleanup_zaqar_mongodb() - Remove residual data files, anything left over from previous
+# runs that a clean run would need to clean up
+function cleanup_zaqar_mongodb {
     if ! timeout $SERVICE_TIMEOUT sh -c "while ! mongo zaqar --eval 'db.dropDatabase();'; do sleep 1; done"; then
         die $LINENO "Mongo DB did not start"
     else
@@ -102,16 +113,14 @@ function configure_zaqar {
     [ ! -d $ZAQAR_API_LOG_DIR ] &&  sudo mkdir -m 755 -p $ZAQAR_API_LOG_DIR
     sudo chown $USER $ZAQAR_API_LOG_DIR
 
+    iniset $ZAQAR_CONF DEFAULT debug True
     iniset $ZAQAR_CONF DEFAULT verbose True
+    iniset $ZAQAR_CONF DEFAULT admin_mode True
     iniset $ZAQAR_CONF DEFAULT use_syslog $SYSLOG
     iniset $ZAQAR_CONF DEFAULT log_file $ZAQAR_API_LOG_FILE
     iniset $ZAQAR_CONF 'drivers:transport:wsgi' bind $ZAQAR_SERVICE_HOST
 
-    iniset $ZAQAR_CONF keystone_authtoken auth_protocol http
-    iniset $ZAQAR_CONF keystone_authtoken admin_user zaqar
-    iniset $ZAQAR_CONF keystone_authtoken admin_password $SERVICE_PASSWORD
-    iniset $ZAQAR_CONF keystone_authtoken admin_tenant_name $SERVICE_TENANT_NAME
-    iniset $ZAQAR_CONF keystone_authtoken signing_dir $ZAQAR_AUTH_CACHE_DIR
+    configure_auth_token_middleware $ZAQAR_CONF zaqar $ZAQAR_AUTH_CACHE_DIR
 
     if [ "$ZAQAR_BACKEND" = 'mysql' ] || [ "$ZAQAR_BACKEND" = 'postgresql' ] ; then
         iniset $ZAQAR_CONF drivers storage sqlalchemy
@@ -120,8 +129,25 @@ function configure_zaqar {
         iniset $ZAQAR_CONF  drivers storage mongodb
         iniset $ZAQAR_CONF 'drivers:storage:mongodb' uri mongodb://localhost:27017/zaqar
         configure_mongodb
-        cleanup_zaqar
+    elif [ "$ZAQAR_BACKEND" = 'redis' ] ; then
+        iniset $ZAQAR_CONF  drivers storage redis
+        iniset $ZAQAR_CONF 'drivers:storage:redis' uri redis://localhost:6379
+        configure_redis
     fi
+
+    cleanup_zaqar
+}
+
+function configure_redis {
+    if is_ubuntu; then
+        install_package redis-server
+    elif is_fedora; then
+        install_package redis
+    else
+        exit_distro_not_supported "redis installation"
+    fi
+
+    install_package python-redis
 }
 
 function configure_mongodb {
@@ -162,9 +188,9 @@ function install_zaqarclient {
 # start_zaqar() - Start running processes, including screen
 function start_zaqar {
     if [[ "$USE_SCREEN" = "False" ]]; then
-        screen_it zaqar-server "zaqar-server --config-file $ZAQAR_CONF --daemon"
+        run_process zaqar-server "zaqar-server --config-file $ZAQAR_CONF --daemon"
     else
-        screen_it zaqar-server "zaqar-server --config-file $ZAQAR_CONF"
+        run_process zaqar-server "zaqar-server --config-file $ZAQAR_CONF"
     fi
 
     echo "Waiting for Zaqar to start..."
@@ -175,6 +201,7 @@ function start_zaqar {
 
 # stop_zaqar() - Stop running processes
 function stop_zaqar {
+    local serv
     # Kill the zaqar screen windows
     for serv in zaqar-server; do
         screen -S $SCREEN_NAME -p $serv -X kill
@@ -182,18 +209,18 @@ function stop_zaqar {
 }
 
 function create_zaqar_accounts {
-    SERVICE_TENANT=$(openstack project list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
+    local service_tenant=$(openstack project list | awk "/ $SERVICE_TENANT_NAME / { print \$2 }")
     ADMIN_ROLE=$(openstack role list | awk "/ admin / { print \$2 }")
 
-    ZAQAR_USER=$(get_or_create_user "zaqar" \
-        "$SERVICE_PASSWORD" $SERVICE_TENANT)
-    get_or_add_user_role $ADMIN_ROLE $ZAQAR_USER $SERVICE_TENANT
+    local zaqar_user=$(get_or_create_user "zaqar" \
+        "$SERVICE_PASSWORD" $service_tenant)
+    get_or_add_user_role $ADMIN_ROLE $zaqar_user $service_tenant
 
     if [[ "$KEYSTONE_CATALOG_BACKEND" = 'sql' ]]; then
 
-        ZAQAR_SERVICE=$(get_or_create_service "zaqar" \
-            "queuing" "Zaqar Service")
-        get_or_create_endpoint $ZAQAR_SERVICE \
+        local zaqar_service=$(get_or_create_service "zaqar" \
+            "messaging" "Zaqar Service")
+        get_or_create_endpoint $zaqar_service \
             "$REGION_NAME" \
             "$ZAQAR_SERVICE_PROTOCOL://$ZAQAR_SERVICE_HOST:$ZAQAR_SERVICE_PORT" \
             "$ZAQAR_SERVICE_PROTOCOL://$ZAQAR_SERVICE_HOST:$ZAQAR_SERVICE_PORT" \

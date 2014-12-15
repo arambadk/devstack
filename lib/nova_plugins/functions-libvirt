@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # lib/nova_plugins/functions-libvirt
 # Common libvirt configuration functions
 
@@ -10,7 +12,7 @@ LV_XTRACE=$(set +o | grep xtrace)
 set +o xtrace
 
 # Defaults
-# -------
+# --------
 
 # if we should turn on massive libvirt debugging
 DEBUG_LIBVIRT=$(trueorfalse False $DEBUG_LIBVIRT)
@@ -57,7 +59,9 @@ cgroup_device_acl = [
 EOF
     fi
 
-    if is_ubuntu; then
+    # Since the release of Debian Wheezy the libvirt init script is libvirtd
+    # and not libvirtd-bin anymore.
+    if is_ubuntu && [ ! -f /etc/init.d/libvirtd ]; then
         LIBVIRT_DAEMON=libvirt-bin
     else
         LIBVIRT_DAEMON=libvirtd

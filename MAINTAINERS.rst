@@ -48,12 +48,23 @@ Neutron
 OpenDaylight
 ~~~~~~~~~~~~
 
-* Kyle Mestery <kmestery@cisco.com>
+* Kyle Mestery <mestery@mestery.com>
+
+OpenFlow Agent (ofagent)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+* YAMAMOTO Takashi <yamamoto@valinux.co.jp>
+* Fumihiko Kakuma <kakuma@valinux.co.jp>
 
 Sahara
 ~~~~~~
 
 * Sergey Lukjanov <slukjanov@mirantis.com>
+
+Swift
+~~~~~
+
+* Chmouel Boudjnah <chmouel@enovance.com>
 
 SUSE
 ~~~~

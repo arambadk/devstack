@@ -53,8 +53,8 @@ source $TOP_DIR/lib/swift
 source $TOP_DIR/lib/ceilometer
 source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/neutron
-source $TOP_DIR/lib/baremetal
 source $TOP_DIR/lib/ldap
+source $TOP_DIR/lib/dstat
 
 # Extras Source
 # --------------
@@ -162,6 +162,8 @@ if is_service_enabled trove; then
     cleanup_trove
 fi
 
+stop_dstat
+
 # Clean up the remainder of the screen processes
 SCREEN=$(which screen)
 if [[ -n "$SCREEN" ]]; then
@@ -170,5 +172,3 @@ if [[ -n "$SCREEN" ]]; then
         screen -X -S $SESSION quit
     fi
 fi
-
-cleanup_tmp

@@ -1,3 +1,4 @@
+docker-io
 ipmitool
 iptables
 ipxe-bootimgs
@@ -8,6 +9,7 @@ net-tools
 openssh-clients
 openvswitch
 python-libguestfs
+sgabios
 syslinux
 tftp-server
 xinetd
