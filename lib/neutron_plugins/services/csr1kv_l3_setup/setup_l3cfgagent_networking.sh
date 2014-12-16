@@ -24,6 +24,26 @@ n1kvPortPolicyProfileNames=(osn_mgmt_pp osn_t1_pp osn_t2_pp)
 vethHostSideName=l3cfgagent_hs
 vethBridgeSideName=l3cfgagent_bs
 
+function get_port_profile_id() {
+    local name=$1
+    local porttype=$2
+    local c=0
+    pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
+    if [ "$pProfileId" == "None" ]; then
+        echo "   Port policy profile $name does not exist. Creating it."
+        _configure_vsm_port_profiles $vsmIP $vsmUsername $vsmPassword $name $porttype
+    fi
+    if [ "${n1kvPortPolicyProfileNames[$i]}" == "sys-uplink" ]; then
+        # The n1kv plugin does not list the above policies so we cannot verify them
+        return
+    fi
+    while [ $c -le 15 ] && [ "$pProfileId" == "None" ]; do
+        pProfileId=`$osn cisco-policy-profile-list | awk 'BEGIN { res="None"; } /'"$name"'/ { res=$2; } END { print res;}'`
+        let c+=1
+        sleep 5
+    done
+}
+
 
 tenantId=`keystone tenant-get $l3AdminTenant 2>&1 | awk '/No tenant| id / { if ($1 == "No") print "No"; else print $4; }'`
 if [ "$tenantId" == "No" ]; then
