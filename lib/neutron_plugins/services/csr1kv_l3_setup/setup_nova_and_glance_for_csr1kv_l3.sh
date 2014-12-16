@@ -170,3 +170,118 @@ elif [ "$hasImage" == "NO SERVER" ]; then
 else
    echo " Yes, it does."
 fi
+
+
+echo -n "Checking if credential '$csr1kvCredentialId' exits..."
+db="$osn"
+if [ "$plugin" == "n1kv" ]; then
+   hd_driver="neutron.plugins.cisco.device_manager.hosting_device_drivers.csr1kv_hd_driver.CSR1kvHostingDeviceDriver"
+   plugging_driver="neutron.plugins.cisco.device_manager.plugging_drivers.n1kv_trunking_driver.N1kvTrunkingPlugDriver"
+else
+   hd_driver="neutron.plugins.cisco.device_manager.hosting_device_drivers.csr1kv_hd_driver.CSR1kvHostingDeviceDriver"
+   plugging_driver="neutron.plugins.cisco.device_manager.plugging_drivers.ovs_trunking_driver.OvsTrunkingPlugDriver"
+fi
+
+sql_statement="SELECT id FROM devicecredentials WHERE id='$csr1kvCredentialId'"
+hasCredential=`mysql $mysql_auth -e "use $db; $sql_statement" | awk '/id/ { print "Yes" }'`
+if [ "$hasCredential" != "Yes" ]; then
+   echo " No, it is not. Registering it."
+    sql_statement="INSERT INTO devicecredentials VALUES
+   ('$csr1kvCredentialId', 'CSR1kv credentials', 'For CSR1kv VM instances',
+    'stack', 'cisco', NULL)"
+   mysql $mysql_auth -e "use $db; $sql_statement"
+else
+   echo " Yes, it is."
+fi
+
+
+echo -n "Checking if '$csr1kvHostingDeviceTemplateName' is registered as hosting device template in $osn ..."
+sql_statement="SELECT id FROM hostingdevicetemplates WHERE id='11111111-2222-3333-4444-555555555555'"
+hasTemplate=`mysql $mysql_auth -e "use $db; $sql_statement" | awk '/id/ { print "Yes" }'`
+
+if [ "$hasTemplate" != "Yes" ]; then
+   echo " No, it is not. Registering it."
+
+   # Columns: tenant_id, id, name, enabled, host_category, service_types,
+   # image, flavor, default_credentials_id, configurations_mechanism,
+   # protocol_port, booting_time, slot_capacity, desired_slots_free,
+   # tenant_bound, device_driver, plugging_driver
+   sql_statement="INSERT INTO hostingdevicetemplates VALUES
+   ('$tenantId', '11111111-2222-3333-4444-555555555555',
+    '$csr1kvHostingDeviceTemplateName', TRUE, 'VM', 'router',
+    '$csr1kvImageName', '$csr1kvFlavorId', '$csr1kvCredentialId', 'Netconf',
+    22, 420, 10, 5, NULL, '$hd_driver', '$plugging_driver')"
+   mysql $mysql_auth -e "use $db; $sql_statement"
+else
+   echo " Yes, it is."
+fi
+
+
+echo -n "Checking if 'Network_Node_template' is registered as hosting device template in $osn ..."
+if [ "$plugin" == "n1kv" ]; then
+   agent_driver="neutron.plugins.cisco.cfg_agent.device_drivers.csr1kv.csr1kv_routing_driver.CSR1kvRoutingDriver"
+else
+   agent_driver="neutron.plugins.cisco.cfg_agent.dummy_driver.DummyRoutingDriver"
+fi
+sql_statement="SELECT id FROM hostingdevicetemplates WHERE id='11111110-2222-3333-4444-555555555555'"
+hasTemplate=`mysql $mysql_auth -e "use $db; $sql_statement" | awk '/id/ { print "Yes" }'`
+
+if [ "$hasTemplate" != "Yes" ]; then
+   echo " No, it is not. Registering it."
+
+   # Columns: tenant_id, id, name, enabled, host_category, service_types,
+   # image, flavor, default_credentials_id, configurations_mechanism,
+   # protocol_port, booting_time, slot_capacity, desired_slots_free,
+   # tenant_bound, device_driver, plugging_driver
+   sql_statement="INSERT INTO hostingdevicetemplates VALUES
+   ('$tenantId', '11111110-2222-3333-4444-555555555555',
+    'Network_Node_template', TRUE, 'Hardware', 'router:VPN:FW',
+    NULL, NULL, NULL, 'CLI', NULL, NULL, 200, 0, NULL,
+    'neutron.plugins.cisco.device_manager.hosting_device_drivers.noop_hd_driver.NoopHostingDeviceDriver',
+    'neutron.plugins.cisco.device_manager.plugging_drivers.noop_plugging_driver.NoopPluggingDriver')"
+   mysql $mysql_auth -e "use $db; $sql_statement"
+else
+   echo " Yes, it is."
+fi
+
+
+echo -n "Checking if 'CSR1kv_router' is registered as router type in $osn ..."
+sql_statement="SELECT id FROM routertypes where id='22221111-2222-3333-4444-555555555555'"
+hasRouterType=`mysql $mysql_auth -e "use $db; $sql_statement" | awk '/id/ { print "Yes" }'`
+
+if [ "$hasRouterType" != "Yes" ]; then
+   echo " No, it is not. Registering it."
+
+   # Columns: tenant_id, id, name, description, template_id, shared,
+   # slot_need, scheduler, cfg_agent_driver
+   sql_statement="INSERT INTO routertypes VALUES
+   ('$tenantId', '22221111-2222-3333-4444-555555555555',
+    'CSR1kv_router','Neutron Router implemented in Cisco CSR1kv',
+    '11111111-2222-3333-4444-555555555555', TRUE, 6,
+    'neutron.plugins.cisco.l3.scheduler.l3_router_hosting_device_scheduler.L3RouterHostingDeviceScheduler',
+    '$agent_driver')"
+    mysql $mysql_auth -e "use $db; $sql_statement"
+else
+   echo " Yes, it is."
+fi
+
+
+echo -n "Checking if 'NetworkNamespace_router' is registered as router type in $osn ..."
+sql_statement="SELECT id FROM routertypes where id='22221112-2222-3333-4444-555555555555'"
+hasRouterType=`mysql $mysql_auth -e "use $db; $sql_statement" | awk '/id/ { print "Yes" }'`
+
+if [ "$hasRouterType" != "Yes" ]; then
+   echo " No, it is not. Registering it."
+
+   # Columns: tenant_id, id, name, description, template_id, shared,
+   # slot_need, scheduler, cfg_agent_driver
+   sql_statement="INSERT INTO routertypes VALUES
+   ('$tenantId', '22221112-2222-3333-4444-555555555555',
+    'NetworkNamespace_router',
+    'Neutron router implemented in Linux network namespace',
+    '11111110-2222-3333-4444-555555555555', TRUE, 6,
+    '', '')"
+   mysql $mysql_auth -e "use $db; $sql_statement"
+else
+   echo " Yes, it is."
+fi
