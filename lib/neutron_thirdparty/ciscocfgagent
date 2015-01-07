@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # ciscocfgagent
 # -------------
 
@@ -27,7 +29,15 @@ function configure_ciscocfgagent {
 }
 
 function init_ciscocfgagent {
-    :
+    if [[ "$Q_PLUGIN" == "csr1kv_openvswitch" ]]; then
+	    plugin=ovs
+    elif [[ "$Q_PLUGIN" == "cisco" || "${Q_CISCO_PLUGIN_SUBPLUGINS[0]}" == "n1kv" ]]; then
+	    plugin=n1kv
+    else
+	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
+    fi
+    echo "Running CSR1Kv setup phase 2 with ${MYSQL_USER} ${MYSQL_PASSWORD}"
+    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_phase2.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
 }
 
 function install_ciscocfgagent {

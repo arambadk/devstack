@@ -564,9 +564,8 @@ function setup_for_csr1kv {
     else
 	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
-    echo "Running CSR1Kv setup with ${MYSQL_USER} ${MYSQL_PASSWORD}"
-    (cd $NEUTRON_DIR/neutron/plugins/cisco/l3/setup/; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD)
-    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_all.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
+    echo "Running CSR1Kv setup phase 2 with ${MYSQL_USER} ${MYSQL_PASSWORD}"
+    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_phase2.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
 }
 
 function create_neutron_initial_network {
