@@ -8,7 +8,9 @@ set +o xtrace
 Q_CISCO_DEVICE_MANAGER_PLUGIN=neutron.plugins.cisco.service_plugins.cisco_device_manager_plugin.CiscoDeviceManagerPlugin
 
 function neutron_cisco_device_manager_configure_common() {
-    _neutron_service_plugin_class_add $Q_CISCO_DEVICE_MANAGER_PLUGIN
+    # bobmel: Temporarily disable the adding to service list and instead do it in cisco_router_plugin
+    # bobmel: since device manager must be loaded first
+#    _neutron_service_plugin_class_add $Q_CISCO_DEVICE_MANAGER_PLUGIN
   
     CISCO_DEVICE_MANAGER_PLUGIN_CONFIG_DIR=$NEUTRON_CONF_DIR/plugins/cisco
     mkdir -p $CISCO_DEVICE_MANAGER_PLUGIN_CONFIG_DIR
