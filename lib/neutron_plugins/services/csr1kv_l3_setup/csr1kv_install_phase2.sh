@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Runs all install and demo scripts in the right order.
+# Runs phase 2 install and demo scripts in the right order.
 
 # osn is the name of Openstack network service, i.e.,
 # it should be either 'neutron' or 'quantum', for
@@ -18,10 +18,6 @@ mgmt_ip=$6
 # Accepts as False: 0 no No NO false False FALSE
 # Accepts as True: 1 yes Yes YES true True TRUE
 # VAR=$(trueorfalse default-value test-value)
-function pause(){
-   read -p "Press [Enter] to continue ......"
-}
-
 function trueorfalse {
     local xtrace=$(set +o | grep xtrace)
     set +o xtrace
@@ -42,6 +38,9 @@ fi
 CREATE_TEST_NETWORKS=$(trueorfalse "False" $Q_CISCO_CREATE_TEST_NETWORKS)
 
 source ~/devstack/openrc $osn L3AdminTenant
+
+echo "***************** Setting up Nova & Glance for CSR1kv *****************"
+./setup_nova_and_glance_for_csr1kv_l3.sh $osn $plugin $localrc $mysql_user $mysql_password
 
 echo "***************** Setting up Neutron for CSR1kv *****************"
 ./setup_neutron_for_csr1kv_l3.sh $osn $plugin $localrc
