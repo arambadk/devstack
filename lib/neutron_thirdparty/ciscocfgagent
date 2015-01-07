@@ -37,7 +37,7 @@ function init_ciscocfgagent {
 	    die $LINENO "Not a deployment with CSR1kv. Exiting!"
     fi
     echo "Running CSR1Kv setup phase 2 with ${MYSQL_USER} ${MYSQL_PASSWORD}"
-    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_phase2.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
+    (cd $Q_CISCO_CSR1KV_SETUP_SCRIPT_DIR; ./csr1kv_install_phase1.sh neutron $plugin $TOP_DIR/localrc $MYSQL_USER $MYSQL_PASSWORD $Q_CISCO_MGMT_CFG_AGENT_IP)
 }
 
 function install_ciscocfgagent {
