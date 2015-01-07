@@ -17,6 +17,12 @@ function neutron_cisco_device_manager_configure_common() {
     Q_CISCO_DEVICE_MANAGER_PLUGIN_CONF_FILE=$CISCO_DEVICE_MANAGER_PLUGIN_CONFIG_DIR/cisco_device_manager_plugin.ini
     cp $NEUTRON_DIR/etc/neutron/plugins/cisco/cisco_device_manager_plugin.ini $Q_CISCO_DEVICE_MANAGER_PLUGIN_CONF_FILE
     Q_PLUGIN_EXTRA_CONF_FILES=(${Q_PLUGIN_EXTRA_CONF_FILES[@]} $Q_CISCO_DEVICE_MANAGER_PLUGIN_CONF_FILE)
+
+    # inject any deployer provided configurations
+    CISCO_INJECT_FILE=$TOP_DIR/cisco_device_manager_plugin.inject
+    if [[ -f $CISCO_INJECT_FILE ]]; then
+        cat $CISCO_INJECT_FILE >> $Q_CISCO_DEVICE_MANAGER_PLUGIN_CONF_FILE
+    fi 
  }
 
 #function neutron_cisco_device_manager_configure_driver() {
