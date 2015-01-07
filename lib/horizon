@@ -72,7 +72,7 @@ function _horizon_config_set {
 # cleanup_horizon() - Remove residual data files, anything left over from previous
 # runs that a clean run would need to clean up
 function cleanup_horizon {
-    if [[ is_fedora && $DISTRO =~ (rhel6) ]]; then
+    if is_fedora && [[ $DISTRO =~ (rhel6) ]]; then
         # If ``/usr/bin/node`` points into ``$DEST``
         # we installed it via ``install_nodejs``
         if [[ $(readlink -f /usr/bin/node) =~ ($DEST) ]]; then
@@ -105,9 +105,6 @@ function init_horizon {
 
     _horizon_config_set $local_settings "" OPENSTACK_HOST \"${KEYSTONE_SERVICE_HOST}\"
     _horizon_config_set $local_settings "" OPENSTACK_KEYSTONE_URL "\"${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}:${KEYSTONE_SERVICE_PORT}/v2.0\""
-    if [[ -n "$KEYSTONE_TOKEN_HASH_ALGORITHM" ]]; then
-        _horizon_config_set $local_settings "" OPENSTACK_TOKEN_HASH_ALGORITHM \""$KEYSTONE_TOKEN_HASH_ALGORITHM"\"
-    fi
 
     if [ -f $SSL_BUNDLE_FILE ]; then
         _horizon_config_set $local_settings "" OPENSTACK_SSL_CACERT \"${SSL_BUNDLE_FILE}\"

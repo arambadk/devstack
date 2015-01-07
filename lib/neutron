@@ -642,6 +642,16 @@ function init_neutron {
     recreate_database $Q_DB_NAME utf8
     # Run Neutron db migrations
     $NEUTRON_BIN_DIR/neutron-db-manage --config-file $NEUTRON_CONF --config-file /$Q_PLUGIN_CONF_FILE upgrade head
+    for svc in fwaas lbaas vpnaas; do
+        if [ "$svc" = "vpnaas" ]; then
+            q_svc="q-vpn"
+        else
+            q_svc="q-$svc"
+        fi
+        if is_service_enabled $q_svc; then
+            $NEUTRON_BIN_DIR/neutron-db-manage --service $svc --config-file $NEUTRON_CONF --config-file /$Q_PLUGIN_CONF_FILE upgrade head
+        fi
+    done
 }
 
 # install_neutron() - Collect source and prepare
@@ -808,7 +818,7 @@ function stop_neutron {
 # cleanup_neutron() - Remove residual data files, anything left over from previous
 # runs that a clean run would need to clean up
 function cleanup_neutron {
-    if [[ is_provider_network && is_ironic_hardware ]]; then
+    if is_provider_network && is_ironic_hardware; then
         for IP in $(ip addr show dev $OVS_PHYSICAL_BRIDGE | grep ' inet ' | awk '{print $2}'); do
             sudo ip addr del $IP dev $OVS_PHYSICAL_BRIDGE
             sudo ip addr add $IP dev $PUBLIC_INTERFACE
@@ -980,7 +990,9 @@ function _configure_neutron_metadata_agent {
     iniset $Q_META_CONF_FILE DEFAULT nova_metadata_ip $Q_META_DATA_IP
     iniset $Q_META_CONF_FILE DEFAULT root_helper "$Q_RR_COMMAND"
 
-    _neutron_setup_keystone $Q_META_CONF_FILE DEFAULT
+    # Configures keystone for metadata_agent
+    # The third argument "True" sets auth_url needed to communicate with keystone
+    _neutron_setup_keystone $Q_META_CONF_FILE DEFAULT True
 
 }
 
@@ -1138,6 +1150,13 @@ function _neutron_setup_rootwrap {
 function _neutron_setup_keystone {
     local conf_file=$1
     local section=$2
+    local use_auth_url=$3
+
+    # Configures keystone for metadata_agent
+    # metadata_agent needs auth_url to communicate with keystone
+    if [[ "$use_auth_url" == "True" ]]; then
+        iniset $conf_file $section auth_url $KEYSTONE_SERVICE_URI/v2.0
+    fi
 
     create_neutron_cache_dir
     configure_auth_token_middleware $conf_file $Q_ADMIN_USERNAME $NEUTRON_AUTH_CACHE_DIR $section
